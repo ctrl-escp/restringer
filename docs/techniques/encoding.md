@@ -1,6 +1,6 @@
 # Encoding
 Encoding is another straightforward yet effective obfuscation tactic used to conceal data in JavaScript.
-Common encoding schemes like Base64 and hexadecimal transform readable strings into seemingly incomprehensible ones. For example:
+Common encoding schemes like [Base64](https://en.wikipedia.org/wiki/Base64) and [base-16 (hexadecimal)](https://en.wikipedia.org/wiki/Hexadecimal) transform readable strings into seemingly incomprehensible ones. For example:
 ```JavaScript
   const encoded = 'cGFzc3dvcmQ9aGFja01lOTQh'; // Base64 for 'password=hackMe94!'
   const decoded = atob(encoded);
@@ -57,3 +57,46 @@ function improvedDecodeBase64Literals(arb) {
 ```
 Checking that the `atob` function isn't declared in the script (`!n.callee.declNode`) is meant to avoid cases where the `atob` function was re-implemented a bit differently,
 which obfuscators might do in order to prevent automatic decoding of Base64 strings.
+## Escaping
+A subset of encoding that's worth mentioning is escaping.
+Escaping is useful when there's a need to include special characters that might break the string.
+For example:
+- Quotes within quotes: 
+  ```JavaScript
+  "Hello, \"friend\""
+  ```    
+  The backslash is used to denote that the next character is not meant to instruct, but is a part of the string.    
+  In this case, the next character - the double quote (`"`) - loses its meaning of terminating the string.
+
+
+- Escaping the [escape character](https://en.wikipedia.org/wiki/Escape_character): 
+  ```JavaScript
+  `C:\\Users\\admin`
+  ```
+  A single backslash is a prefix for a special character like the backspace `\b`, newline `\n`, tab `\t`, etc.    
+  If there's a need to use the backslash as a character in iteself and not as an escape prefix, it needs to be escaped in the same way - with a backslash prefix - `\\`.
+
+
+- [Unicode](https://en.wikipedia.org/wiki/Unicode):
+  ```JavaScript
+  ['\u263A', '\u{1F600}']; // ☺, 😀
+  ```
+  The `\u` prefix takes 4 hexadecimal digits to denote a single Unicode character.
+
+- [Hexadecimal](https://en.wikipedia.org/wiki/Hexadecimal)
+  ```JavaScript
+  const password = '\x68\x61\x63\x6b\x4d\x65\x39\x34\x21';
+  ```
+  This hex representation of a string can be easily resolved by pasting the string in the console.
+
+- [URL encoding](https://en.wikipedia.org/wiki/Percent-encoding):
+  ```JavaScript
+  const url = 'https://example.com/search?q=hello%20world'; // The space character is escaped to %20
+  ```
+  
+- HTML escaped [entities](https://www.freeformatter.com/html-entities.html):
+  ```HTML
+  <!-- An unescaped tag --><script>alert(1)</script>
+  <!-- An escaped tag   -->&lt;&#115;&#99;&#114;&#105;&#112;&#116;&gt;&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;&lt;&#47;&#115;&#99;&#114;&#105;&#112;&#116;&gt;
+  ```
+  The above HTML is rendered normally, but is actually written as `&lt;&#115;&#99;&#114;&#105;&#112;&#116;&gt;&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;&lt;&#47;&#115;&#99;&#114;&#105;&#112;&#116;&gt;`
