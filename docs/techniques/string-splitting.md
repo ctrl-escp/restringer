@@ -11,7 +11,7 @@ This simple technique is sometimes used to bypass security filters (`'<scr' + 'i
 but there are also valid uses like making a calculation clear like `sleep(5 * 1000); // Sleep for 5 seconds` or `const twoDays = 2 * 24 * 60 * 60 * 1000;`.
 
 From AST perspective, turning `'ab'` into `'a' + 'b'` changes a Literal node into a Binary Expression where the left and right nodes
-are Literals. Reversing this technique is simple:
+are [Literals](https://en.wikipedia.org/wiki/Literal_(computer_programming)). Reversing this technique is simple:
 ```JavaScript
 function resolveBinaryExpressionOfLiterals(arb) {
   function doOperation(v1, v2, op) {
