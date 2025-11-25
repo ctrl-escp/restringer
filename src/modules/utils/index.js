@@ -1,9 +1,7 @@
 export default {
 	areReferencesModified: (await import('./areReferencesModified.js')).areReferencesModified,
-	canUnaryExpressionBeResolved: (await import('./canUnaryExpressionBeResolved.js')).canUnaryExpressionBeResolved,
 	createNewNode: (await import('./createNewNode.js')).createNewNode,
 	createOrderedSrc: (await import('./createOrderedSrc.js')).createOrderedSrc,
-	doesBinaryExpressionContainOnlyLiterals: (await import('./doesBinaryExpressionContainOnlyLiterals.js')).doesBinaryExpressionContainOnlyLiterals,
 	doesDescendantMatchCondition: (await import('./doesDescendantMatchCondition.js')).doesDescendantMatchCondition,
 	evalInVm: (await import('./evalInVm.js')).evalInVm,
 	generateHash: (await import('./generateHash.js')).generateHash,

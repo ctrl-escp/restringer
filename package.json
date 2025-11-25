@@ -19,17 +19,20 @@
     "test": "tests"
   },
   "dependencies": {
+    "commander": "^14.0.2",
     "flast": "2.2.5",
-    "isolated-vm": "^5.0.3",
-    "obfuscation-detector": "^2.0.5"
+    "isolated-vm": "5.0.4",
+    "obfuscation-detector": "^2.0.7"
   },
   "scripts": {
     "test": "node --test --trace-warnings --no-node-snapshot",
-    "test:coverage": "node --test --trace-warnings --no-node-snapshot --experimental-test-coverage"
+    "test:coverage": "node --test --trace-warnings --no-node-snapshot --experimental-test-coverage",
+    "test:quick": "node --test --trace-warnings --no-node-snapshot tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
+    "test:quick:watch": "node --test --trace-warnings --no-node-snapshot --watch tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PerimeterX/restringer.git"
+    "url": "git+https://github.com/HumanSecurity/restringer.git"
   },
   "keywords": [
     "obfuscation",
@@ -42,14 +45,14 @@
   "author": "Ben Baryo (ben.baryo@humansecurity.com)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/PerimeterX/Restringer/issues"
+    "url": "https://github.com/HumanSecurity/restringer/issues"
   },
-  "homepage": "https://github.com/PerimeterX/Restringer#readme",
+  "homepage": "https://github.com/HumanSecurity/restringer#readme",
   "devDependencies": {
-    "@babel/eslint-parser": "^7.25.9",
-    "@babel/plugin-syntax-import-assertions": "^7.26.0",
-    "eslint": "^9.16.0",
-    "globals": "^15.13.0",
+    "@babel/eslint-parser": "^7.28.5",
+    "@babel/plugin-syntax-import-assertions": "^7.27.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
     "husky": "^9.1.7"
   }
 }
