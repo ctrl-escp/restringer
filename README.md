@@ -8,8 +8,6 @@
 
 REstringer automatically detects obfuscation patterns and applies targeted deobfuscation techniques to restore readable JavaScript code. It handles various obfuscation methods while respecting scope limitations and maintaining code functionality.
 
-🌐 **Try it online**: [restringer.tech](https://restringer.tech)
-
 📧 **Contact**: For questions and suggestions, open an issue or find me on Twitter / X - Ben Baryo - [@ctrl__esc](https://twitter.com/ctrl__esc)
 
 ---
@@ -335,8 +333,6 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 ### Community
 - 💬 [GitHub Issues](https://github.com/HumanSecurity/restringer/issues) - Bug reports and feature requests  
 - 🐦 [Twitter @ctrl__esc](https://twitter.com/ctrl__esc) - Updates and discussions
-- 🌐 [Online Tool](https://restringer.tech) - Try REstringer in your browser
-
 ---
 
 ## License
