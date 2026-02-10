@@ -114,12 +114,13 @@ export function createNewNode(value) {
 				name: 'undefined',
 			};
 			break;
-		case 'Null':
-			newNode = {
-				type: 'Literal',
-				raw: 'null',
-			};
-			break;
+	case 'Null':
+		newNode = {
+			type: 'Literal',
+			value: null,
+			raw: 'null',
+		};
+		break;
 		case 'BigInt':
 			newNode = {
 				type: 'Literal',
@@ -159,8 +160,18 @@ export function createNewNode(value) {
 			}
 			break;
 		case 'RegExp':
+			// Validate that RegExp has required properties
+			// Some RegExp objects copied from isolated-vm may have undefined/null source/flags
+			if (!value || typeof value !== 'object' ||
+				value.source === undefined || value.source === null ||
+				value.flags === undefined || value.flags === null ||
+				typeof value.source !== 'string' || typeof value.flags !== 'string') {
+
+				break; // Return BAD_VALUE (newNode is already BAD_VALUE)
+			}
 			newNode = {
 				type: 'Literal',
+				value: null,  // Explicitly set to null to prevent escodegen from using value
 				regex: {
 					pattern: value.source,
 					flags: value.flags,
