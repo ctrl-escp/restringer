@@ -92,11 +92,15 @@ export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationMatch(arb
 			
 			// Check for exactly one assignment to a literal value
 			const assignmentRef = getSingleAssignmentReference(n);
-			if (assignmentRef && assignmentRef.parentNode.right.type === 'Literal') {
-				
+			if (assignmentRef && (assignmentRef.parentNode.right.type === 'Literal' || assignmentRef.parentNode.right.type === 'Identifier')) {
+
 				// Ensure no unsafe usage patterns exist
+				// Only check conditional context for write (assignment) references -
+				// a read reference inside a conditional is safe to inline
+				const isWriteReference = (r) =>
+					r.parentNode?.type === 'AssignmentExpression' && r.parentKey === 'left';
 				const hasUnsafeReferences = n.references.some(r =>
-					isForLoopIterator(r) || isInConditionalContext(r)
+					isForLoopIterator(r) || (isWriteReference(r) && isInConditionalContext(r))
 				);
 				
 				if (!hasUnsafeReferences) {
@@ -130,12 +134,23 @@ export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationTransform
 	
 	// Additional safety check: ensure references aren't modified in complex ways
 	if (!areReferencesModified(arb.ast, referencesToReplace)) {
+		// For Identifier values (e.g., te = O), verify the target is safe to inline
+		if (valueNode.type === 'Identifier') {
+			if (!valueNode.declNode) {
+				return arb; // Can't verify target safety without declaration node
+			}
+			const targetRefs = valueNode.declNode.references || [];
+			if (areReferencesModified(arb.ast, targetRefs)) {
+				return arb;
+			}
+		}
 		for (let i = 0; i < referencesToReplace.length; i++) {
 			const ref = referencesToReplace[i];
-			
-			// Skip function calls where identifier is the callee
-			// Example: let func; func = someFunction; func(); // Don't replace func()
-			if (ref.parentNode.type === 'CallExpression' && ref.parentKey === 'callee') {
+
+			// Skip function calls where identifier is the callee and value is a Literal
+			// Example: let x; x = 3; x(); // Don't replace with 3()
+			// But allow: let te; te = O; te(123); // Replace with O(123)
+			if (ref.parentNode.type === 'CallExpression' && ref.parentKey === 'callee' && valueNode.type === 'Literal') {
 				continue;
 			}
 
