@@ -58,7 +58,7 @@ const MAX_CACHE_SIZE = 100;
  * // evalInVm('[1,2,3].length') => {type: 'Literal', value: 3, raw: '3'}
  */
 export function evalInVm(stringToEval, sb) {
-	const cacheName = `eval-${generateHash(stringToEval)}`;
+	const cacheName = `eval-${sb?.id || 'no-sb'}-${generateHash(stringToEval)}`;
 	if (CACHE[cacheName] === undefined) {
 		// Simple cache eviction: clear all when hitting size limit
 		if (Object.keys(CACHE).length >= MAX_CACHE_SIZE) CACHE = {};

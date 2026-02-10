@@ -19,6 +19,9 @@ const DEFAULT_MEMORY_LIMIT = 128;
 // Default execution timeout (in milliseconds)
 const DEFAULT_TIMEOUT = 1000;
 
+// Auto-incrementing ID for unique sandbox identification in evalInVm cache
+let sandboxIdCounter = 0;
+
 /**
  * Isolated sandbox environment for executing untrusted JavaScript code during deobfuscation.
  * 
@@ -52,6 +55,7 @@ export class Sandbox {
 	 * The sandbox is configured with memory limits, execution timeouts, and blocked APIs.
 	 */
 	constructor() {
+		this.id = ++sandboxIdCounter;
 		this.replacedItems = {...BLOCKED_APIS};
 		this.replacedItemsNames = Object.keys(BLOCKED_APIS);
 		this.timeout = DEFAULT_TIMEOUT;
