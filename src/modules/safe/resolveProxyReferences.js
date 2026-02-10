@@ -2,6 +2,30 @@ import {areReferencesModified} from '../utils/areReferencesModified.js';
 import {doesDescendantMatchCondition} from '../utils/doesDescendantMatchCondition.js';
 import {getMainDeclaredObjectOfMemberExpression} from '../utils/getMainDeclaredObjectOfMemberExpression.js';
 
+/**
+ * Checks if the target identifier name is shadowed by a different declaration
+ * at the reference's scope, which would make replacement incorrect.
+ */
+function isTargetShadowedAtReference(ref, targetName, targetDeclNode) {
+	let scope = ref.scope;
+	while (scope) {
+		const vars = scope.variables || [];
+		for (let j = 0; j < vars.length; j++) {
+			if (vars[j].name === targetName) {
+				const ids = vars[j].identifiers || [];
+				for (let k = 0; k < ids.length; k++) {
+					if (ids[k] === targetDeclNode) {
+						return false; // Same declaration = not shadowed
+					}
+				}
+				return true; // Different declaration = shadowed
+			}
+		}
+		scope = scope.upper;
+	}
+	return false;
+}
+
 // Static array for supported node types to avoid recreation overhead
 const SUPPORTED_REFERENCE_TYPES = ['Identifier', 'MemberExpression'];
 
@@ -126,7 +150,8 @@ export function resolveProxyReferencesMatch(arb, candidateFilter = () => true) {
 		}
 		
 		// Both the proxy and target must not be modified
-		if (areReferencesModified(arb.ast, refs) || areReferencesModified(arb.ast, [n.init])) {
+		const initRefs = n.init.declNode?.references || [n.init];
+		if (areReferencesModified(arb.ast, refs) || areReferencesModified(arb.ast, initRefs)) {
 			continue;
 		}
 		
@@ -157,7 +182,21 @@ export function resolveProxyReferencesTransform(arb, match) {
 	
 	// Replace each reference to the proxy with the target
 	for (let i = 0; i < references.length; i++) {
-		arb.markNode(references[i], targetNode);
+		const ref = references[i];
+		// Determine which name to check for shadowing
+		let checkName, checkDeclNode;
+		if (targetNode.type === 'Identifier') {
+			checkName = targetNode.name;
+			checkDeclNode = targetNode.declNode;
+		} else if (targetNode.type === 'MemberExpression') {
+			const rootObj = getMainDeclaredObjectOfMemberExpression(targetNode);
+			checkName = rootObj?.name;
+			checkDeclNode = rootObj?.declNode;
+		}
+		if (checkName && isTargetShadowedAtReference(ref, checkName, checkDeclNode)) {
+			continue;
+		}
+		arb.markNode(ref, targetNode);
 	}
 	
 	return arb;

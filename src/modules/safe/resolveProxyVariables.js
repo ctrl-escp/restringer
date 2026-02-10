@@ -1,6 +1,30 @@
 import {areReferencesModified} from '../utils/areReferencesModified.js';
 
 /**
+ * Checks if the target identifier name is shadowed by a different declaration
+ * at the reference's scope, which would make replacement incorrect.
+ */
+function isTargetShadowedAtReference(ref, targetName, targetDeclNode) {
+	let scope = ref.scope;
+	while (scope) {
+		const vars = scope.variables || [];
+		for (let j = 0; j < vars.length; j++) {
+			if (vars[j].name === targetName) {
+				const ids = vars[j].identifiers || [];
+				for (let k = 0; k < ids.length; k++) {
+					if (ids[k] === targetDeclNode) {
+						return false; // Same declaration = not shadowed
+					}
+				}
+				return true; // Different declaration = shadowed
+			}
+		}
+		scope = scope.upper;
+	}
+	return false;
+}
+
+/**
  * Validates that a VariableDeclarator represents a proxy variable assignment.
  * 
  * A proxy variable is one that simply assigns another identifier without modification.
@@ -87,14 +111,23 @@ export function resolveProxyVariablesTransform(arb, match) {
 		if (areReferencesModified(arb.ast, references)) {
 			return arb;
 		}
-		
+		// Also check if the TARGET variable's references are modified
+		const targetRefs = targetIdentifier.declNode?.references || [];
+		if (areReferencesModified(arb.ast, targetRefs)) {
+			return arb;
+		}
+
 		// Replace all references with the target identifier
 		for (let i = 0; i < references.length; i++) {
 			const ref = references[i];
+			// Skip if target name is shadowed by a different declaration at this reference
+			if (isTargetShadowedAtReference(ref, targetIdentifier.name, targetIdentifier.declNode)) {
+				continue;
+			}
 			arb.markNode(ref, targetIdentifier);
 		}
 	}
-	
+
 	return arb;
 }
 
@@ -122,8 +155,52 @@ export function resolveProxyVariablesTransform(arb, match) {
 export default function resolveProxyVariables(arb, candidateFilter = () => true) {
 	const matches = resolveProxyVariablesMatch(arb, candidateFilter);
 	
+	// Separate matches into safe and unsafe batches
+	const safeMatches = [];
+	const unsafeMatches = [];
+
+	// Pre-validate all matches before applying any changes
 	for (let i = 0; i < matches.length; i++) {
-		arb = resolveProxyVariablesTransform(arb, matches[i]);
+		const match = matches[i];
+		const {declaratorNode, targetIdentifier, references, shouldRemove} = match;
+		const proxyName = declaratorNode.id?.name || '?';
+		const targetName = targetIdentifier?.name || '?';
+
+		// Skip self-replacements (proxy name === target name)
+		// These are no-ops and waste processing time
+		if (proxyName === targetName) {
+			continue;
+		}
+
+		if (shouldRemove) {
+			// Unused proxies are always safe to remove
+			safeMatches.push(match);
+		} else {
+			// Check safety conditions using original AST state
+			if (!areReferencesModified(arb.ast, references)) {
+				const targetRefs = targetIdentifier.declNode?.references || [];
+				if (!areReferencesModified(arb.ast, targetRefs)) {
+					// Check shadowing for each reference
+					let allRefsSafe = true;
+					for (let j = 0; j < references.length; j++) {
+						if (isTargetShadowedAtReference(references[j], targetIdentifier.name, targetIdentifier.declNode)) {
+							allRefsSafe = false;
+							break;
+						}
+					}
+					if (allRefsSafe) {
+						safeMatches.push(match);
+						continue;
+					}
+				}
+			}
+			unsafeMatches.push(match);
+		}
+	}
+
+	// Apply all safe replacements in one batch
+	for (let i = 0; i < safeMatches.length; i++) {
+		arb = resolveProxyVariablesTransform(arb, safeMatches[i]);
 	}
 	
 	return arb;
