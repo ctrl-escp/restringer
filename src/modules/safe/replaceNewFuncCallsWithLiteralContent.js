@@ -21,7 +21,20 @@ function parseCodeStringToAST(codeStr) {
 		};
 	}
 	
-	const body = generateFlatAST(codeStr, {detailed: false, includeSrc: false})[0].body;
+	let body;
+	const flatAST = generateFlatAST(codeStr, {detailed: false, includeSrc: false});
+	if (flatAST.length && flatAST[0].body) {
+		body = flatAST[0].body;
+	} else {
+		// Code string comes from new Function("code") where "code" is a function body.
+		// Statements like "return this" are only valid inside a function, so wrap and re-parse.
+		const wrappedAST = generateFlatAST(`(function(){${codeStr}})`, {detailed: false, includeSrc: false});
+		const funcBody = wrappedAST.length && wrappedAST[0].body[0]?.expression?.body?.body;
+		if (!funcBody) {
+			throw new Error(`Failed to parse code string: "${codeStr.substring(0, 80)}..."`);
+		}
+		body = funcBody;
+	}
 	
 	if (body.length > 1) {
 		return {
