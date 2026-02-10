@@ -159,8 +159,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 	const cache = getCache(originNode.scriptHash);
 	const srcHash = generateHash(originNode.src);
 	const cacheNameId = `context-${originNode.nodeId}-${srcHash}`;
-	const cacheNameSrc = `context-${srcHash}`;
-	let cached = cache[cacheNameId] || cache[cacheNameSrc];
+	let cached = cache[cacheNameId];
 	if (!cached) {
 		while (stack.length) {
 			const node = stack.shift();
@@ -274,8 +273,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 		}
 		// Convert to array and remove redundant nodes
 		cached = removeRedundantNodes([...filteredNodes]);
-		cache[cacheNameId] = cached;        // Caching context for the same node
-		cache[cacheNameSrc] = cached;       // Caching context for a different node with similar content
+		cache[cacheNameId] = cached;
 	}
 	return cached;
 }
