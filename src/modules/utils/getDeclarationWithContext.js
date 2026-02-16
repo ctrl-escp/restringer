@@ -165,7 +165,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 		while (stack.length) {
 			const node = stack.shift();
 			if (visitedNodes.has(node.nodeId)) continue;
-			visitedNodes.add(node);
+			visitedNodes.add(node.nodeId);
 			// Do not collect any context if one of the relevant nodes is marked to be replaced or deleted
 			if (node.isMarked || doesDescendantMatchCondition(node, n => n.isMarked)) {
 				collected.length = 0;
