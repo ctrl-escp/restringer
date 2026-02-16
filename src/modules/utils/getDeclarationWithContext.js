@@ -223,7 +223,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 
 			for (let i = 0; i < targetNodes.length; i++) {
 				const targetNode = targetNodes[i];
-				if (!visitedNodes.has(node.nodeId)) stack.push(targetNode);
+				if (!visitedNodes.has(targetNode.nodeId)) stack.push(targetNode);
 				// noinspection JSUnresolvedVariable
 				if (targetNode === targetNode.scope.block) {
 					// Collect out-of-scope variables used inside the scope
