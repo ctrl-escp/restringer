@@ -1,4 +1,4 @@
-import {applyIteratively} from 'flast';
+import {applyIterativelyArborist} from 'flast';
 import * as normalizeComputed from '../safe/normalizeComputed.js';
 import * as normalizeEmptyStatements from '../safe/normalizeEmptyStatements.js';
 import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotOperator.js';
@@ -17,15 +17,15 @@ import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotO
  * Uses flast's applyIteratively to ensure all transformations are applied until no more
  * changes occur, handling cases where one transformation enables another.
  *
- * @param {string} script - JavaScript source code to normalize
+ * @param {Arborist} script - Arborist object with AST to normalize
  * @return {string} The normalized script with improved readability
  *
  * @example
  * // Input: obj['method'](); !!true; ;;;
  * // Output: obj.method(); true;
  */
-export function normalizeScript(script) {
-	return applyIteratively(script, [
+export function normalizeScript(arborist) {
+	return applyIterativelyArborist(arborist, [
 		normalizeComputed.default,
 		normalizeRedundantNotOperator.default,
 		normalizeEmptyStatements.default,

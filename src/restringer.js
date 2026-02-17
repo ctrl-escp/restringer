@@ -1,7 +1,7 @@
 import {fileURLToPath} from 'node:url';
-import {logger as flastLogger, applyIteratively} from 'flast';
+import {logger as flastLogger, applyIterativelyArborist, Arborist} from 'flast';
 import {processors} from './processors/index.js';
-import {detectObfuscation} from 'obfuscation-detector';
+import {detectObfuscationFlatAST} from 'obfuscation-detector';
 import {config, safe as safeMod, unsafe as unsafeMod, utils} from './modules/index.js';
 const {normalizeScript} = utils.default;
 import {readFileSync} from 'node:fs';
@@ -28,6 +28,7 @@ export class REstringer {
 	 */
 	constructor(script, normalize = true) {
 		this.script = script;
+		this.arborist = new Arborist(script);
 		this.normalize = normalize;
 		this.modified = false;
 		this.obfuscationName = 'Generic';
@@ -86,7 +87,7 @@ export class REstringer {
 	 * Determine the type of the obfuscation, and populate the appropriate pre- and post- processors.
 	 */
 	determineObfuscationType() {
-		const detectedObfuscationType = detectObfuscation(this.script, false).slice(-1)[0];
+		const detectedObfuscationType = detectObfuscationFlatAST(this.arborist.ast, false).slice(-1)[0];
 		if (detectedObfuscationType) {
 			this.obfuscationName = detectedObfuscationType;
 			if (processors[detectedObfuscationType]) {
@@ -110,14 +111,14 @@ export class REstringer {
 	 */
 	_loopSafeAndUnsafeDeobfuscationMethods() {
 		// Track whether any iteration made changes (vs this.modified which tracks current iteration only)
-		let wasEverModified, script;
+		let wasEverModified;
 		do {
 			this.modified = false;
-			script = applyIteratively(this.script, this.safeMethods, this.maxIterations);
-			script = applyIteratively(script, this.unsafeMethods, 1);
-			if (this.script !== script) {
+			this.arborist = applyIterativelyArborist(this.arborist, this.safeMethods, this.maxIterations);
+			this.arborist = applyIterativelyArborist(this.arborist, this.unsafeMethods, 1);
+			if (this.arborist.script !== this.script) {
 				this.modified = true;
-				this.script = script;
+				this.script = this.arborist.script;
 			}
 			if (this.modified) wasEverModified = true;
 		} while (this.modified); // Run this loop until the deobfuscation methods stop being effective.
@@ -137,8 +138,9 @@ export class REstringer {
 		this._runProcessors(this._preprocessors);
 		this._loopSafeAndUnsafeDeobfuscationMethods();
 		this._runProcessors(this._postprocessors);
-		if (this.modified && this.normalize) this.script = normalizeScript(this.script);
-		if (clean) this.script = applyIteratively(this.script, [safe.removeDeadNodes], this.maxIterations);
+		if (this.modified && this.normalize) this.arborist = normalizeScript(this.arborist);
+		if (clean) this.arborist = applyIterativelyArborist(this.arborist, [safe.removeDeadNodes], this.maxIterations);
+		this.script = this.arborist.script;
 		return this.modified;
 	}
 
@@ -150,7 +152,8 @@ export class REstringer {
 	_runProcessors(processors) {
 		for (let i = 0; i < processors.length; i++) {
 			const processor = processors[i];
-			this.script = applyIteratively(this.script, [processor], 1);
+			this.arborist = applyIterativelyArborist(this.arborist, [processor], 1);
+			this.script = this.arborist.script;
 		}
 	}
 }
