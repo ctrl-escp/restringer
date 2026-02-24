@@ -363,7 +363,7 @@ describe('UTILS: createNewNode', async () => {
 	});
 	it('Null', () => {
 		const code = null;
-		const expected = {type: 'Literal', raw: 'null'};
+		const expected = {type: 'Literal', value: null, raw: 'null'};
 		const result = targetModule(code);
 		assert.deepStrictEqual(result, expected);
 	});
@@ -371,7 +371,7 @@ describe('UTILS: createNewNode', async () => {
 	});
 	it('RegExp', () => {
 		const code = /regexp/gi;
-		const expected = {type: 'Literal', regex: {flags: 'gi', pattern: 'regexp'}};
+		const expected = {type: 'Literal', value: null, regex: {flags: 'gi', pattern: 'regexp'}};
 		const result = targetModule(code);
 		assert.deepStrictEqual(result, expected);
 	});
