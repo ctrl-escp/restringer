@@ -47,9 +47,33 @@ export function resolveMemberExpressionsLocalReferencesMatch(arb, candidateFilte
 				const prop = n.property;
 				// Skip if property identifier has modified references (not safe to resolve)
 				// E.g. let idx = 0; idx = 1; const val = arr[idx]; -> mainObj is 'arr', prop is 'idx', skip because idx modified
-				if (prop.type === 'Identifier' && prop.declNode?.references && 
+				if (prop.type === 'Identifier' && prop.declNode?.references &&
 					areReferencesModified(arb.ast, prop.declNode.references)) continue;
-				
+
+				// Skip if the same property is assigned (written to) through any reference
+				// to the same object. This means the property value is dynamic and can't be
+				// safely resolved in a sandbox.
+				// E.g. var e = this; e.sealed = !0; ... if (e.sealed) -> skip e.sealed reads
+				// because the assignment may be inside a function (runtime-dependent).
+				const propName = prop.name || prop.value;
+				const objRefs = declNode.references || [];
+				let isPropertyWritten = false;
+				for (let j = 0; j < objRefs.length; j++) {
+					const ref = objRefs[j];
+					const refParent = ref.parentNode;
+					if (refParent && refParent.type === 'MemberExpression' &&
+						refParent !== n) {
+						const refPropName = refParent.property?.name || refParent.property?.value;
+						if (refPropName === propName &&
+							refParent.parentNode?.type === 'AssignmentExpression' &&
+							refParent.parentKey === 'left') {
+							isPropertyWritten = true;
+							break;
+						}
+					}
+				}
+				if (isPropertyWritten) continue;
+
 				matches.push(n);
 			}
 		}
