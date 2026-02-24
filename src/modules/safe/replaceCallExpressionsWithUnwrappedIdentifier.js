@@ -64,8 +64,14 @@ export function replaceCallExpressionsWithUnwrappedIdentifierTransform(arb, node
 	const calleeDecl = node.callee.declNode;
 	const parentNode = calleeDecl.parentNode;
 	
-	// Get the function body (either from init for expressions or body for declarations)
-	const declBody = parentNode.init?.body || parentNode.body;
+	// Get the function node and its body
+	const funcNode = parentNode.init || parentNode;
+	const declBody = funcNode.body || parentNode.body;
+	
+	// Guard: do not unwrap functions whose parameters are actually used in the body.
+	// Replacing the call with the return expression would discard the arguments,
+	// leaving the parameter references dangling or accidentally capturing outer names.
+	if (hasUsedParameters(funcNode)) return arb;
 	
 	// Handle function bodies (arrow functions without blocks or block statements)
 	if (!Array.isArray(declBody)) {
@@ -104,6 +110,26 @@ export function replaceCallExpressionsWithUnwrappedIdentifierTransform(arb, node
 function isUnwrappableExpression(expr) {
 	return expr.type === 'Identifier' || 
 		(expr.type === 'CallExpression' && !expr.arguments?.length);
+}
+
+/**
+ * Check if a function has any parameters that are actually referenced in its body.
+ * 
+ * Functions with used parameters cannot be safely unwrapped by replacing call
+ * expressions with their return value, because the arguments passed at the call
+ * site would be lost. Only functions with no parameters or exclusively unused
+ * parameters can be safely unwrapped.
+ * 
+ * @param {ASTNode} funcNode - The function node (FunctionExpression, ArrowFunctionExpression, or FunctionDeclaration)
+ * @return {boolean} True if the function has parameters that are referenced in its body
+ */
+function hasUsedParameters(funcNode) {
+	const params = funcNode.params;
+	if (!params?.length) return false;
+	for (let i = 0; i < params.length; i++) {
+		if (params[i].references?.length > 0) return true;
+	}
+	return false;
 }
 
 /**
