@@ -134,6 +134,17 @@ describe('UTILS: evalInVm', async () => {
 		const result = targetModule(code);
 		assert.deepStrictEqual(result, expected);
 	});
+	it('TP-15: Different sandboxes with same expression produce independent results', async () => {
+		const {Sandbox} = await import('../src/modules/utils/sandbox.js');
+		const sb1 = new Sandbox();
+		sb1.run('var arr = ["hello"];');
+		const sb2 = new Sandbox();
+		sb2.run('var arr = ["world"];');
+		const result1 = targetModule('arr[0]', sb1);
+		const result2 = targetModule('arr[0]', sb2);
+		assert.strictEqual(result1.value, 'hello');
+		assert.strictEqual(result2.value, 'world');
+	});
 });
 describe('UTILS: areReferencesModified', async () => {
 	const targetModule = (await import('../src/modules/utils/areReferencesModified.js')).areReferencesModified;
@@ -380,6 +391,13 @@ describe('UTILS: createNewNode', async () => {
 		const expected = {type: 'Literal', value: 123n, raw: '123n', bigint: '123'};
 		const result = targetModule(code);
 		assert.deepStrictEqual(result, expected);
+	});
+	it('RegExp with invalid source/flags returns BAD_VALUE', () => {
+		const badRegexp = /test/g;
+		Object.defineProperty(badRegexp, 'source', { value: undefined });
+		Object.defineProperty(badRegexp, 'flags', { value: undefined });
+		const result = targetModule(badRegexp);
+		assert.deepStrictEqual(result, BAD_VALUE);
 	});
 	it('Symbol with description', () => {
 		const code = Symbol('test');
@@ -1025,6 +1043,19 @@ describe('UTILS: getDeclarationWithContext', async () => {
 		const expected = [];
 		assert.deepStrictEqual(result, expected);
 	});
+	it('TP-9: Same-name variables in different scopes get distinct contexts', () => {
+		const code = `function a() { var r; r = 1; return r; }\nfunction b() { var r; r = 2; return r; }`;
+		const ast = generateFlatAST(code);
+		const rDecls = ast.filter(n => n.type === 'Identifier' && n.name === 'r' &&
+			n.parentNode?.type === 'VariableDeclarator' && n.parentKey === 'id');
+		assert.strictEqual(rDecls.length, 2);
+		getCache.flush();
+		const ctx1 = targetModule(rDecls[0]);
+		const ctx2 = targetModule(rDecls[1]);
+		const ctx1Src = ctx1.map(n => n.src).join(';');
+		const ctx2Src = ctx2.map(n => n.src).join(';');
+		assert.notStrictEqual(ctx1Src, ctx2Src);
+	});
 });
 describe('UTILS: getDescendants', async () => {
 	const targetModule = (await import('../src/modules/utils/getDescendants.js')).getDescendants;
@@ -1393,5 +1424,15 @@ describe('UTILS: Sandbox', async () => {
 		assert.ok(!sandbox.isReference({}));
 		assert.ok(!sandbox.isReference([]));
 		assert.ok(!sandbox.isReference('string'));
+	});
+	it('TP-11: Each sandbox instance has a unique numeric ID', () => {
+		const sb1 = new Sandbox();
+		const sb2 = new Sandbox();
+		const sb3 = new Sandbox();
+		assert.strictEqual(typeof sb1.id, 'number');
+		assert.strictEqual(typeof sb2.id, 'number');
+		assert.ok(sb1.id !== sb2.id, 'sb1 and sb2 should have different IDs');
+		assert.ok(sb2.id !== sb3.id, 'sb2 and sb3 should have different IDs');
+		assert.ok(sb1.id > 0, 'ID should be positive');
 	});
 });

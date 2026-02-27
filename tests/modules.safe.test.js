@@ -377,6 +377,12 @@ describe('SAFE: replaceCallExpressionsWithUnwrappedIdentifier', async () => {
 		const result = applyModuleToCode(code, targetModule);
 		assert.strictEqual(result, expected);
 	});
+	it('TN-5: Do not unwrap function that returns its own parameter', () => {
+		const code = `function a(x) { return x; } a(someValue)('method');`;
+		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
 });
 describe('SAFE: replaceEvalCallsWithLiteralContent', async () => {
 	const targetModule = (await import('../src/modules/safe/replaceEvalCallsWithLiteralContent.js')).default;
@@ -770,6 +776,18 @@ describe('SAFE: replaceIdentifierWithFixedValueNotAssignedAtDeclaration', async 
 		const result = applyModuleToCode(code, targetModule);
 		assert.strictEqual(result, expected);
 	});
+	it('TP-7: Read reference in conditional does not block inlining', () => {
+		const code = `let x; x = 42; var y = cond ? use(x) : other;`;
+		const expected = `let x;\nx = 42;\nvar y = cond ? use(42) : other;`;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
+	it('TP-8: Replace callee reference when value is Identifier', () => {
+		const code = `function O(a) { return a; }\nlet te; te = O; te(42);`;
+		const expected = `function O(a) {\n  return a;\n}\nlet te;\nte = O;\nO(42);`;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
 });
 describe('SAFE: replaceNewFuncCallsWithLiteralContent', async () => {
 	const targetModule = (await import('../src/modules/safe/replaceNewFuncCallsWithLiteralContent.js')).default;
@@ -836,6 +854,12 @@ describe('SAFE: replaceNewFuncCallsWithLiteralContent', async () => {
 	it('TN-6: Do not replace Function constructor with invalid syntax', () => {
 		const code = `new Function("invalid syntax {{{")();`;
 		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
+	it('TP-6: Replace Function constructor with return statement in body', () => {
+		const code = `new Function("return 42")();`;
+		const expected = `42;`;
 		const result = applyModuleToCode(code, targetModule);
 		assert.strictEqual(result, expected);
 	});
@@ -1461,6 +1485,18 @@ describe('SAFE: resolveProxyReferences', async () => {
 		const result = applyModuleToCode(code, targetModule);
 		assert.strictEqual(result, expected);
 	});
+	it('TN-10: Do not replace when target has modified references', () => {
+		const code = `const arr = [1, 2]; arr.push(3); const alias = arr; const val = alias[0];`;
+		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
+	it('TN-11: Do not replace when target name is shadowed in inner scope', () => {
+		const code = `const arr = [1]; const ref = arr; function inner() { const arr = [2]; console.log(ref[0]); }`;
+		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
 });
 describe('SAFE: resolveProxyVariables', async () => {
 	const targetModule = (await import('../src/modules/safe/resolveProxyVariables.js')).default;
@@ -1526,6 +1562,18 @@ describe('SAFE: resolveProxyVariables', async () => {
 	});
 	it('TN-5: Do not replace non-identifier initialization', () => {
 		const code = `const proxy = obj.prop; console.log(proxy);`;
+		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
+	it('TN-6: Do not replace when target has modified references', () => {
+		const code = `const target = [1]; target.push(2); const proxy = target; console.log(proxy[0]);`;
+		const expected = code;
+		const result = applyModuleToCode(code, targetModule);
+		assert.strictEqual(result, expected);
+	});
+	it('TN-7: Do not replace when target name is shadowed in inner scope', () => {
+		const code = `function O() { return 1; }\nvar n = O;\n[].forEach(function() { var O = {}; n(); });`;
 		const expected = code;
 		const result = applyModuleToCode(code, targetModule);
 		assert.strictEqual(result, expected);

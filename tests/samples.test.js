@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import {readFileSync} from 'node:fs';
 import {describe, it} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {join} from 'node:path';
+import {join, dirname} from 'node:path';
 import {REstringer} from '../src/restringer.js';
 
 function getDeobfuscatedCode(code) {
@@ -13,8 +13,8 @@ function getDeobfuscatedCode(code) {
 }
 
 describe('Samples tests', () => {
-	const resourcePath = './resources';
-	const cwd = fileURLToPath(import.meta.url).split('/').slice(0, -1).join('/');
+	const resourcePath = 'resources';
+	const cwd = dirname(fileURLToPath(import.meta.url));
 	it('Deobfuscate sample: JSFuck', () => {
 		const sampleFilename = join(cwd, resourcePath, 'jsfuck.js');
 		const expectedSolutionFilename = sampleFilename + '-deob.js';

@@ -931,6 +931,12 @@ describe('UNSAFE: resolveLocalCalls', async () => {
 		const result = applyModuleToCode(code, targetModule);
 		assert.deepStrictEqual(result, expected);
 	});
+	it('TP-8: Resolve call with AssignmentExpression callee', () => {
+		const code = `function P(x) { return x * 2; }\nvar r;\n(r = P)(5);`;
+		const expected = `function P(x) {\n  return x * 2;\n}\nvar r;\n10;`;
+		const result = applyModuleToCode(code, targetModule);
+		assert.deepStrictEqual(result, expected);
+	});
 });
 describe('UNSAFE: resolveMinimalAlphabet', async () => {
 	const targetModule = (await import('../src/modules/unsafe/resolveMinimalAlphabet.js')).default;
@@ -1043,6 +1049,12 @@ describe('resolveMemberExpressionsLocalReferences (resolveMemberExpressionsLocal
 	it('TN-6: Property with skipped name (length)', () => {
 		const code = `const arr = [1, 2, 3]; const val = arr.length;`;
 		const expected = `const arr = [1, 2, 3]; const val = arr.length;`;
+		const result = applyModuleToCode(code, targetModule);
+		assert.deepStrictEqual(result, expected);
+	});
+	it('TN-7: Do not resolve when same property is written via another reference', () => {
+		const code = `var e = {sealed: false}; e.sealed = true; if (e.sealed) console.log('yes');`;
+		const expected = code;
 		const result = applyModuleToCode(code, targetModule);
 		assert.deepStrictEqual(result, expected);
 	});
