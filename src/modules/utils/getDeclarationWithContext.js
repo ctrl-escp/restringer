@@ -138,7 +138,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 	const stack = [originNode];   // The working stack for nodes to be reviewed
 	/** @type {ASTNode[]} */
 	const collected = [];         // These will be our context
-	/** @type {Set<ASTNode>} */
+	/** @type {Set<number>} */
 	const visitedNodes = new Set();  // Track visited nodes to prevent infinite loops
 	/** @type {number[][]} */
 	const collectedRanges = [];   // Prevent collecting overlapping nodes
@@ -149,7 +149,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 	 */
 	function addToStack(node) {
 		if (!node || 
-			visitedNodes.has(node) ||
+			visitedNodes.has(node.nodeId) ||
 			stack.includes(node) ||
 			SKIP_TRAVERSAL_TYPES.includes(node.type)) {
 			return;
@@ -164,8 +164,8 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 	if (!cached) {
 		while (stack.length) {
 			const node = stack.shift();
-			if (visitedNodes.has(node)) continue;
-			visitedNodes.add(node);
+			if (visitedNodes.has(node.nodeId)) continue;
+			visitedNodes.add(node.nodeId);
 			// Do not collect any context if one of the relevant nodes is marked to be replaced or deleted
 			if (node.isMarked || doesDescendantMatchCondition(node, n => n.isMarked)) {
 				collected.length = 0;
@@ -223,7 +223,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
 
 			for (let i = 0; i < targetNodes.length; i++) {
 				const targetNode = targetNodes[i];
-				if (!visitedNodes.has(targetNode)) stack.push(targetNode);
+				if (!visitedNodes.has(targetNode.nodeId)) stack.push(targetNode);
 				// noinspection JSUnresolvedVariable
 				if (targetNode === targetNode.scope.block) {
 					// Collect out-of-scope variables used inside the scope
