@@ -1,48 +1,46 @@
 import {evalInVm} from '../utils/evalInVm.js';
 import {doesDescendantMatchCondition} from '../utils/doesDescendantMatchCondition.js';
 
-
-
 /**
  * Identifies unary and binary expressions that can be resolved to simplified values.
- * Targets JSFuck-style obfuscation patterns using non-numeric operands and excludes 
+ * Targets JSFuck-style obfuscation patterns using non-numeric operands and excludes
  * expressions containing ThisExpression for safe evaluation.
  * @param {Arborist} arb - Arborist instance
  * @param {Function} [candidateFilter] - Optional filter function for additional candidate filtering
  * @return {ASTNode[]} Array of expression nodes that can be resolved
  */
 export function resolveMinimalAlphabetMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const unaryNodes = arb.ast[0].typeMap.UnaryExpression;
-	const binaryNodes = arb.ast[0].typeMap.BinaryExpression;
+  const matches = [];
+  const unaryNodes = arb.ast[0].typeMap.UnaryExpression;
+  const binaryNodes = arb.ast[0].typeMap.BinaryExpression;
 
-	// Process unary expressions: +true, +[], -false, ~[], etc.
-	for (let i = 0; i < unaryNodes.length; i++) {
-		const n = unaryNodes[i];
-		if (((n.argument.type === 'Literal' && /^\D/.test(n.argument.raw[0])) ||
+  // Process unary expressions: +true, +[], -false, ~[], etc.
+  for (let i = 0; i < unaryNodes.length; i++) {
+    const n = unaryNodes[i];
+    if (((n.argument.type === 'Literal' && /^\D/.test(n.argument.raw[0])) ||
 			n.argument.type === 'ArrayExpression') &&
 		candidateFilter(n)) {
-			// Skip expressions containing ThisExpression for safe evaluation
-			if (doesDescendantMatchCondition(n, descendant => descendant.type === 'ThisExpression')) continue;
-			matches.push(n);
-		}
-	}
+      // Skip expressions containing ThisExpression for safe evaluation
+      if (doesDescendantMatchCondition(n, descendant => descendant.type === 'ThisExpression')) continue;
+      matches.push(n);
+    }
+  }
 
-	// Process binary expressions: [] + [], [+[]], etc.
-	for (let i = 0; i < binaryNodes.length; i++) {
-		const n = binaryNodes[i];
-		if (n.operator === '+' &&
+  // Process binary expressions: [] + [], [+[]], etc.
+  for (let i = 0; i < binaryNodes.length; i++) {
+    const n = binaryNodes[i];
+    if (n.operator === '+' &&
 		(n.left.type !== 'MemberExpression' && Number.isNaN(parseFloat(n.left?.value))) &&
 		n.left?.type !== 'ThisExpression' &&
 		n.right?.type !== 'ThisExpression' &&
 		candidateFilter(n)) {
-			// Skip expressions containing ThisExpression for safe evaluation
-			if (doesDescendantMatchCondition(n, descendant => descendant.type === 'ThisExpression')) continue;
-			matches.push(n);
-		}
-	}
+      // Skip expressions containing ThisExpression for safe evaluation
+      if (doesDescendantMatchCondition(n, descendant => descendant.type === 'ThisExpression')) continue;
+      matches.push(n);
+    }
+  }
 
-	return matches;
+  return matches;
 }
 
 /**
@@ -53,17 +51,17 @@ export function resolveMinimalAlphabetMatch(arb, candidateFilter = () => true) {
  * @return {Arborist} The modified Arborist instance
  */
 export function resolveMinimalAlphabetTransform(arb, matches) {
-	if (!matches.length) return arb;
+  if (!matches.length) return arb;
 
-	for (let i = 0; i < matches.length; i++) {
-		const n = matches[i];
-		const replacementNode = evalInVm(n.src);
-		if (replacementNode !== evalInVm.BAD_VALUE) {
-			arb.markNode(n, replacementNode);
-		}
-	}
+  for (let i = 0; i < matches.length; i++) {
+    const n = matches[i];
+    const replacementNode = evalInVm(n.src);
+    if (replacementNode !== evalInVm.BAD_VALUE) {
+      arb.markNode(n, replacementNode);
+    }
+  }
 
-	return arb;
+  return arb;
 }
 
 /**
@@ -75,6 +73,6 @@ export function resolveMinimalAlphabetTransform(arb, matches) {
  * @return {Arborist} The modified Arborist instance
  */
 export default function resolveMinimalAlphabet(arb, candidateFilter = () => true) {
-	const matches = resolveMinimalAlphabetMatch(arb, candidateFilter);
-	return resolveMinimalAlphabetTransform(arb, matches);
+  const matches = resolveMinimalAlphabetMatch(arb, candidateFilter);
+  return resolveMinimalAlphabetTransform(arb, matches);
 }

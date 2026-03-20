@@ -1,6 +1,6 @@
 /**
  * Augmented Array Replacements
- * 
+ *
  * Detects and resolves obfuscation patterns where arrays are shuffled by immediately-invoked
  * function expressions (IIFEs). This processor identifies shuffled arrays that are re-ordered
  * by IIFEs and replaces them with their final static state.
@@ -14,7 +14,7 @@
  * })(a, 1);
  * console[a[0]](a[1]);   // Before: console['hello']('log') -> Error
  *                        // After:  console['log']('hello') -> Works
- * 
+ *
  * Resolution Process:
  * 1. Identify IIFE patterns that manipulate arrays with literal shift counts
  * 2. Execute the IIFE in a secure VM to determine final array state
@@ -47,43 +47,43 @@ const FUNCTION_DECLARATION_PATTERN = /function/i;
  *
  * @example
  * // Matches: (function(arr, 3) { shuffle_logic })(myArrayVar, 3)
- * // Matches: ((arr, n) => { shuffle_logic })(myArrayVar, 1) 
+ * // Matches: ((arr, n) => { shuffle_logic })(myArrayVar, 1)
  * // Matches: (function(fn, n) { shuffle_logic })(selfModifyingFunc, 2) [if fn reassigns itself]
  * // Ignores: (function() {})(), myFunc(arr), (function(fn) {})(staticFunction)
  */
 export function augmentedArrayMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const candidates = arb.ast[0].typeMap.CallExpression;
-	
-	for (let i = 0; i < candidates.length; i++) {
-		const n = candidates[i];
-		if ((n.callee.type === 'FunctionExpression' || n.callee.type === 'ArrowFunctionExpression') &&
-			n.arguments.length > 1 && 
+  const matches = [];
+  const candidates = arb.ast[0].typeMap.CallExpression;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const n = candidates[i];
+    if ((n.callee.type === 'FunctionExpression' || n.callee.type === 'ArrowFunctionExpression') &&
+			n.arguments.length > 1 &&
 			n.arguments[0].type === 'Identifier' &&
-			n.arguments[1].type === 'Literal' && 
+			n.arguments[1].type === 'Literal' &&
 			!Number.isNaN(parseInt(n.arguments[1].value)) &&
 			candidateFilter(n)) {
-			// For function declarations, only match if they are self-modifying
-			if (n.arguments[0].declNode?.parentNode?.type === 'FunctionDeclaration') {
-				const functionBody = n.arguments[0].declNode.parentNode.body;
-				const functionName = n.arguments[0].name;
-				// Check if function reassigns itself (self-modifying pattern)
-				const isSelfModifying = functionBody?.body?.some(stmt => 
-					stmt.type === 'ExpressionStatement' &&
+      // For function declarations, only match if they are self-modifying
+      if (n.arguments[0].declNode?.parentNode?.type === 'FunctionDeclaration') {
+        const functionBody = n.arguments[0].declNode.parentNode.body;
+        const functionName = n.arguments[0].name;
+        // Check if function reassigns itself (self-modifying pattern)
+        const isSelfModifying = functionBody?.body?.some(stmt =>
+          stmt.type === 'ExpressionStatement' &&
 					stmt.expression?.type === 'AssignmentExpression' &&
 					stmt.expression.left?.type === 'Identifier' &&
-					stmt.expression.left.name === functionName
-				);
-				if (isSelfModifying) {
-					matches.push(n);
-				}
-			} else if (n.arguments[0].declNode?.parentNode?.type === 'VariableDeclarator') {
-				// Variables are always potential candidates
-				matches.push(n);
-			}
-		}
-	}
-	return matches;
+					stmt.expression.left.name === functionName,
+        );
+        if (isSelfModifying) {
+          matches.push(n);
+        }
+      } else if (n.arguments[0].declNode?.parentNode?.type === 'VariableDeclarator') {
+        // Variables are always potential candidates
+        matches.push(n);
+      }
+    }
+  }
+  return matches;
 }
 
 /**
@@ -107,47 +107,47 @@ export function augmentedArrayMatch(arb, candidateFilter = () => true) {
  * // Output: const arr = [2, 1];
  */
 export function augmentedArrayTransform(arb, n) {
-	// Find the target ExpressionStatement or SequenceExpression containing this IIFE
-	let targetNode = n;
-	while (targetNode && (targetNode.type !== 'ExpressionStatement' && targetNode.parentNode.type !== 'SequenceExpression')) {
-		targetNode = targetNode?.parentNode;
-	}
-	
-	// Extract the array identifier being augmented (first argument of the IIFE)
-	const relevantArrayIdentifier = n.arguments.find(node => node.type === 'Identifier');
-	
-	// Determine if the array comes from a function declaration or variable declaration
-	const declKind = FUNCTION_DECLARATION_PATTERN.test(relevantArrayIdentifier.declNode.parentNode.type) ? '' : 'var ';
-	const ref = !declKind ? `${relevantArrayIdentifier.name}()` : relevantArrayIdentifier.name;
-	
-	// Build execution context: array declaration + IIFE + array reference for final state
-	const contextNodes = getDeclarationWithContext(n, true);
-	const context = `${contextNodes.length ? createOrderedSrc(contextNodes) : ''}`;
-	const src = `${context};\n${createOrderedSrc([targetNode])}\n${ref};`;
-	
-	// Execute the augmentation in VM to get the final array state
-	const replacementNode = evalInVm(src);
-	if (replacementNode !== evalInVm.BAD_VALUE) {
-		// Mark the IIFE for removal
-		arb.markNode(targetNode || n);
-		
-		// Replace the array with its final augmented state
-		if (relevantArrayIdentifier.declNode.parentNode.type === 'FunctionDeclaration') {
-			// For function declarations, replace the function body with a return statement
-			arb.markNode(relevantArrayIdentifier.declNode.parentNode.body, {
-				type: 'BlockStatement',
-				body: [{
-					type: 'ReturnStatement',
-					argument: replacementNode,
-				}],
-			});
-		} else {
-			// For variable declarations, replace the initializer with the computed array
-			arb.markNode(relevantArrayIdentifier.declNode.parentNode.init, replacementNode);
-		}
-	}
-	
-	return arb;
+  // Find the target ExpressionStatement or SequenceExpression containing this IIFE
+  let targetNode = n;
+  while (targetNode && (targetNode.type !== 'ExpressionStatement' && targetNode.parentNode.type !== 'SequenceExpression')) {
+    targetNode = targetNode?.parentNode;
+  }
+
+  // Extract the array identifier being augmented (first argument of the IIFE)
+  const relevantArrayIdentifier = n.arguments.find(node => node.type === 'Identifier');
+
+  // Determine if the array comes from a function declaration or variable declaration
+  const declKind = FUNCTION_DECLARATION_PATTERN.test(relevantArrayIdentifier.declNode.parentNode.type) ? '' : 'var ';
+  const ref = !declKind ? `${relevantArrayIdentifier.name}()` : relevantArrayIdentifier.name;
+
+  // Build execution context: array declaration + IIFE + array reference for final state
+  const contextNodes = getDeclarationWithContext(n, true);
+  const context = `${contextNodes.length ? createOrderedSrc(contextNodes) : ''}`;
+  const src = `${context};\n${createOrderedSrc([targetNode])}\n${ref};`;
+
+  // Execute the augmentation in VM to get the final array state
+  const replacementNode = evalInVm(src);
+  if (replacementNode !== evalInVm.BAD_VALUE) {
+    // Mark the IIFE for removal
+    arb.markNode(targetNode || n);
+
+    // Replace the array with its final augmented state
+    if (relevantArrayIdentifier.declNode.parentNode.type === 'FunctionDeclaration') {
+      // For function declarations, replace the function body with a return statement
+      arb.markNode(relevantArrayIdentifier.declNode.parentNode.body, {
+        type: 'BlockStatement',
+        body: [{
+          type: 'ReturnStatement',
+          argument: replacementNode,
+        }],
+      });
+    } else {
+      // For variable declarations, replace the initializer with the computed array
+      arb.markNode(relevantArrayIdentifier.declNode.parentNode.init, replacementNode);
+    }
+  }
+
+  return arb;
 }
 
 /**
@@ -173,13 +173,13 @@ export function augmentedArrayTransform(arb, n) {
  * // After:  const a = [2,1];
  */
 export function replaceArrayWithStaticAugmentedVersion(arb) {
-	const matches = augmentedArrayMatch(arb);
-	
-	for (let i = 0; i < matches.length; i++) {
-		arb = augmentedArrayTransform(arb, matches[i]);
-	}
-	
-	return arb;
+  const matches = augmentedArrayMatch(arb);
+
+  for (let i = 0; i < matches.length; i++) {
+    arb = augmentedArrayTransform(arb, matches[i]);
+  }
+
+  return arb;
 }
 
 export const preprocessors = [replaceArrayWithStaticAugmentedVersion, resolveFunctionToArray.default];

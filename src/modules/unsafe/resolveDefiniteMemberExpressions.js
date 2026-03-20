@@ -12,39 +12,39 @@ const VALID_OBJECT_TYPES = ['ArrayExpression', 'Literal'];
  * @return {ASTNode[]} Array of MemberExpression nodes ready for evaluation
  */
 export function resolveDefiniteMemberExpressionsMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.MemberExpression;
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		
-		// Prevent unsafe transformations that could break semantics
-		if (n.parentNode.type === 'UpdateExpression') {
-			// Prevent replacing (++[[]][0]) with (++1) which changes semantics
-			continue;
-		}
-		
-		if (n.parentKey === 'callee') {
-			// Prevent replacing obj.method() with undefined() calls
-			continue;
-		}
-		
-		// Property must be a literal or non-computed identifier (safe to evaluate)
-		const hasValidProperty = n.property.type === 'Literal' || 
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.MemberExpression;
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+
+    // Prevent unsafe transformations that could break semantics
+    if (n.parentNode.type === 'UpdateExpression') {
+      // Prevent replacing (++[[]][0]) with (++1) which changes semantics
+      continue;
+    }
+
+    if (n.parentKey === 'callee') {
+      // Prevent replacing obj.method() with undefined() calls
+      continue;
+    }
+
+    // Property must be a literal or non-computed identifier (safe to evaluate)
+    const hasValidProperty = n.property.type === 'Literal' ||
 			(n.property.name && !n.computed);
-		if (!hasValidProperty) continue;
-		
-		// Object must be a literal or array expression (deterministic)
-		if (!VALID_OBJECT_TYPES.includes(n.object.type)) continue;
-		
-		// Object must have content to access (length or elements)
-		if (!(n.object?.value?.length || n.object?.elements?.length)) continue;
-		
-		if (candidateFilter(n)) {
-			matches.push(n);
-		}
-	}
-	return matches;
+    if (!hasValidProperty) continue;
+
+    // Object must be a literal or array expression (deterministic)
+    if (!VALID_OBJECT_TYPES.includes(n.object.type)) continue;
+
+    // Object must have content to access (length or elements)
+    if (!(n.object?.value?.length || n.object?.elements?.length)) continue;
+
+    if (candidateFilter(n)) {
+      matches.push(n);
+    }
+  }
+  return matches;
 }
 
 /**
@@ -55,19 +55,19 @@ export function resolveDefiniteMemberExpressionsMatch(arb, candidateFilter = () 
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveDefiniteMemberExpressionsTransform(arb, matches) {
-	if (!matches.length) return arb;
-	
-	const sharedSb = new Sandbox();
-	
-	for (let i = 0; i < matches.length; i++) {
-		const n = matches[i];
-		const replacementNode = evalInVm(n.src, sharedSb);
-		
-		if (replacementNode !== evalInVm.BAD_VALUE) {
-			arb.markNode(n, replacementNode);
-		}
-	}
-	return arb;
+  if (!matches.length) return arb;
+
+  const sharedSb = new Sandbox();
+
+  for (let i = 0; i < matches.length; i++) {
+    const n = matches[i];
+    const replacementNode = evalInVm(n.src, sharedSb);
+
+    if (replacementNode !== evalInVm.BAD_VALUE) {
+      arb.markNode(n, replacementNode);
+    }
+  }
+  return arb;
 }
 
 /**
@@ -79,6 +79,6 @@ export function resolveDefiniteMemberExpressionsTransform(arb, matches) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveDefiniteMemberExpressions(arb, candidateFilter = () => true) {
-	const matches = resolveDefiniteMemberExpressionsMatch(arb, candidateFilter);
-	return resolveDefiniteMemberExpressionsTransform(arb, matches);
+  const matches = resolveDefiniteMemberExpressionsMatch(arb, candidateFilter);
+  return resolveDefiniteMemberExpressionsTransform(arb, matches);
 }

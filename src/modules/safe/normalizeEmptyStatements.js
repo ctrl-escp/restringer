@@ -8,23 +8,23 @@ const CONTROL_FLOW_STATEMENT_TYPES = ['ForStatement', 'ForInStatement', 'ForOfSt
  * @return {ASTNode[]} Array of empty statement nodes that can be safely removed
  */
 export function normalizeEmptyStatementsMatch(arb, candidateFilter = () => true) {
-	const relevantNodes = arb.ast[0].typeMap.EmptyStatement;
-		
-	const matchingNodes = [];
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		if (candidateFilter(n)) {
-			// Control flow statements can have empty statements as their body.
-			// If we delete that empty statement the syntax breaks
-			// e.g. for (var i = 0, b = 8;;); - valid for statement
-			// e.g. if (condition); - valid if statement with empty consequent
-			if (!CONTROL_FLOW_STATEMENT_TYPES.includes(n.parentNode.type)) {
-				matchingNodes.push(n);
-			}
-		}
-	}
-	return matchingNodes;
+  const relevantNodes = arb.ast[0].typeMap.EmptyStatement;
+
+  const matchingNodes = [];
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+    if (candidateFilter(n)) {
+      // Control flow statements can have empty statements as their body.
+      // If we delete that empty statement the syntax breaks
+      // e.g. for (var i = 0, b = 8;;); - valid for statement
+      // e.g. if (condition); - valid if statement with empty consequent
+      if (!CONTROL_FLOW_STATEMENT_TYPES.includes(n.parentNode.type)) {
+        matchingNodes.push(n);
+      }
+    }
+  }
+  return matchingNodes;
 }
 
 /**
@@ -34,36 +34,36 @@ export function normalizeEmptyStatementsMatch(arb, candidateFilter = () => true)
  * @return {Arborist}
  */
 export function normalizeEmptyStatementsTransform(arb, node) {
-	arb.markNode(node);
-	return arb;
+  arb.markNode(node);
+  return arb;
 }
 
 /**
  * Remove empty statements that are not required for syntax correctness.
- * 
+ *
  * Empty statements (just semicolons) can be safely removed in most contexts,
  * but must be preserved in control flow statements where they serve as the statement body:
  *   - for (var i = 0; i < 10; i++); // The semicolon is the empty loop body
  *   - while (condition); // The semicolon is the empty loop body
  *   - if (condition); else;// The semicolon is the empty if consequent and the empty else alternate
- * 
+ *
  * Safe to remove:
  *   - Standalone empty statements: "var x = 1;;"
  *   - Empty statements in blocks: "if (true) {;}"
- * 
+ *
  * Must preserve:
  *   - Control flow body empty statements: "for(;;);", "while(true);", "if(condition);"
- * 
+ *
  * @param {Arborist} arb
  * @param {Function} [candidateFilter] a filter to apply on the candidates list. Defaults to true.
  * @return {Arborist}
  */
 export default function normalizeEmptyStatements(arb, candidateFilter = () => true) {
-	const matchingNodes = normalizeEmptyStatementsMatch(arb, candidateFilter);
-	
-	for (let i = 0; i < matchingNodes.length; i++) {
-		arb = normalizeEmptyStatementsTransform(arb, matchingNodes[i]);
-	}
-	
-	return arb;
+  const matchingNodes = normalizeEmptyStatementsMatch(arb, candidateFilter);
+
+  for (let i = 0; i < matchingNodes.length; i++) {
+    arb = normalizeEmptyStatementsTransform(arb, matchingNodes[i]);
+  }
+
+  return arb;
 }

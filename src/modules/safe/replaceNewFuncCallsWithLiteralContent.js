@@ -14,35 +14,35 @@ import {generateHash} from '../utils/generateHash.js';
  * @return {ASTNode} The parsed AST node
  */
 function parseCodeStringToAST(codeStr) {
-	if (!codeStr) {
-		return {
-			type: 'Literal',
-			value: codeStr,
-		};
-	}
-	
-	const body = generateFlatAST(codeStr, {detailed: false, includeSrc: false})[0].body;
-	
-	if (body.length > 1) {
-		return {
-			type: 'BlockStatement',
-			body,
-		};
-	}
-	
-	const singleStatement = body[0];
-	
-	// Unwrap single expressions from ExpressionStatement wrapper
-	if (singleStatement.type === 'ExpressionStatement') {
-		return singleStatement.expression;
-	}
-	
-	// For immediately-executed functions, unwrap single return statements
-	if (singleStatement.type === 'ReturnStatement' && singleStatement.argument) {
-		return singleStatement.argument;
-	}
-	
-	return singleStatement;
+  if (!codeStr) {
+    return {
+      type: 'Literal',
+      value: codeStr,
+    };
+  }
+
+  const body = generateFlatAST(codeStr, {detailed: false, includeSrc: false})[0].body;
+
+  if (body.length > 1) {
+    return {
+      type: 'BlockStatement',
+      body,
+    };
+  }
+
+  const singleStatement = body[0];
+
+  // Unwrap single expressions from ExpressionStatement wrapper
+  if (singleStatement.type === 'ExpressionStatement') {
+    return singleStatement.expression;
+  }
+
+  // For immediately-executed functions, unwrap single return statements
+  if (singleStatement.type === 'ReturnStatement' && singleStatement.argument) {
+    return singleStatement.argument;
+  }
+
+  return singleStatement;
 }
 
 /**
@@ -58,14 +58,14 @@ function parseCodeStringToAST(codeStr) {
  * @return {ASTNode} The node that should be replaced
  */
 function getReplacementTarget(callNode, replacementNode) {
-	// For BlockStatement replacements in standalone expressions, replace the entire ExpressionStatement
-	if (callNode.parentNode.type === 'ExpressionStatement' && 
+  // For BlockStatement replacements in standalone expressions, replace the entire ExpressionStatement
+  if (callNode.parentNode.type === 'ExpressionStatement' &&
 		replacementNode.type === 'BlockStatement') {
-		return callNode.parentNode;
-	}
-	
-	// For all other cases (including variable assignments), replace just the call expression
-	return callNode;
+    return callNode.parentNode;
+  }
+
+  // For all other cases (including variable assignments), replace just the call expression
+  return callNode;
 }
 
 /**
@@ -88,26 +88,26 @@ function getReplacementTarget(callNode, replacementNode) {
  * @return {ASTNode[]} Array of NewExpression nodes that can be safely replaced
  */
 export function replaceNewFuncCallsWithLiteralContentMatch(arb, candidateFilter = () => true) {
-	// Direct access to typeMap without spread operator for better performance
-	const relevantNodes = arb.ast[0].typeMap.NewExpression || [];
-	const matches = [];
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		
-		// Optimized condition ordering: cheapest checks first for better performance
-		if (candidateFilter(n) &&
+  // Direct access to typeMap without spread operator for better performance
+  const relevantNodes = arb.ast[0].typeMap.NewExpression || [];
+  const matches = [];
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+
+    // Optimized condition ordering: cheapest checks first for better performance
+    if (candidateFilter(n) &&
 			n.parentKey === 'callee' && // Used as callee in immediate call
 			n.callee?.name === 'Function' && // Constructor is 'Function'
 			n.arguments?.length === 1 && // Exactly one argument
 			n.arguments[0].type === 'Literal' && // Argument is a literal string
 			!n.parentNode?.arguments?.length) { // Immediate call has no arguments
-			
-			matches.push(n);
-		}
-	}
-	
-	return matches;
+
+      matches.push(n);
+    }
+  }
+
+  return matches;
 }
 
 /**
@@ -123,26 +123,26 @@ export function replaceNewFuncCallsWithLiteralContentMatch(arb, candidateFilter 
  * @return {Arborist} The modified arborist instance
  */
 export function replaceNewFuncCallsWithLiteralContentTransform(arb, n) {
-	const cache = getCache(arb.ast[0].scriptHash);
-	const targetCodeStr = n.arguments[0].value;
-	const cacheName = `replaceEval-${generateHash(targetCodeStr)}`;
-	
-	try {
-		// Use cache to avoid re-parsing identical code strings
-		if (!cache[cacheName]) {
-			cache[cacheName] = parseCodeStringToAST(targetCodeStr);
-		}
-		
-		const replacementNode = cache[cacheName];
-		const targetNode = getReplacementTarget(n.parentNode, replacementNode);
-		
-		arb.markNode(targetNode, replacementNode);
-	} catch (e) {
-		// Log parsing failures but don't crash the transformation
-		logger.debug(`[-] Unable to replace new function's body with call expression: ${e}`);
-	}
-	
-	return arb;
+  const cache = getCache(arb.ast[0].scriptHash);
+  const targetCodeStr = n.arguments[0].value;
+  const cacheName = `replaceEval-${generateHash(targetCodeStr)}`;
+
+  try {
+    // Use cache to avoid re-parsing identical code strings
+    if (!cache[cacheName]) {
+      cache[cacheName] = parseCodeStringToAST(targetCodeStr);
+    }
+
+    const replacementNode = cache[cacheName];
+    const targetNode = getReplacementTarget(n.parentNode, replacementNode);
+
+    arb.markNode(targetNode, replacementNode);
+  } catch (e) {
+    // Log parsing failures but don't crash the transformation
+    logger.debug(`[-] Unable to replace new function's body with call expression: ${e}`);
+  }
+
+  return arb;
 }
 
 /**
@@ -168,13 +168,13 @@ export function replaceNewFuncCallsWithLiteralContentTransform(arb, n) {
  * @return {Arborist} The modified arborist instance
  */
 export default function replaceNewFuncCallsWithLiteralContent(arb, candidateFilter = () => true) {
-	// Find all matching NewExpression nodes
-	const matches = replaceNewFuncCallsWithLiteralContentMatch(arb, candidateFilter);
-	
-	// Transform each matching node
-	for (let i = 0; i < matches.length; i++) {
-		arb = replaceNewFuncCallsWithLiteralContentTransform(arb, matches[i]);
-	}
-	
-	return arb;
+  // Find all matching NewExpression nodes
+  const matches = replaceNewFuncCallsWithLiteralContentMatch(arb, candidateFilter);
+
+  // Transform each matching node
+  for (let i = 0; i < matches.length; i++) {
+    arb = replaceNewFuncCallsWithLiteralContentTransform(arb, matches[i]);
+  }
+
+  return arb;
 }

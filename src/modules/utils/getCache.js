@@ -19,16 +19,16 @@ let RELEVANT_SCRIPT_HASH = null;
  * // cache[`eval-${generateHash(code)}`] = result;
  */
 export function getCache(currentScriptHash) {
-	// Input validation - handle null/undefined gracefully
-	const scriptHash = currentScriptHash ?? 'no-hash';
-	
-	// Cache invalidation: clear when script changes
-	if (scriptHash !== RELEVANT_SCRIPT_HASH) {
-		RELEVANT_SCRIPT_HASH = scriptHash;
-		CACHE = {};
-	}
-	
-	return CACHE;
+  // Input validation - handle null/undefined gracefully
+  const scriptHash = currentScriptHash ?? 'no-hash';
+
+  // Cache invalidation: clear when script changes
+  if (scriptHash !== RELEVANT_SCRIPT_HASH) {
+    RELEVANT_SCRIPT_HASH = scriptHash;
+    CACHE = {};
+  }
+
+  return CACHE;
 }
 
 /**
@@ -36,7 +36,7 @@ export function getCache(currentScriptHash) {
  * Useful for clearing memory between processing phases or for testing.
  */
 getCache.flush = function() {
-	CACHE = {};
-	// Note: RELEVANT_SCRIPT_HASH is intentionally preserved to avoid
-	// unnecessary cache misses on the next getCache call with same hash
+  CACHE = {};
+  // Note: RELEVANT_SCRIPT_HASH is intentionally preserved to avoid
+  // unnecessary cache misses on the next getCache call with same hash
 };

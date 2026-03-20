@@ -18,35 +18,35 @@
  * // Returns [leftIdentifier, rightIdentifier] - all nested child nodes
  */
 export function getDescendants(targetNode) {
-	// Input validation
-	if (!targetNode) {
-		return [];
-	}
-	
-	// Return cached result if available
-	if (targetNode.descendants) {
-		return targetNode.descendants;
-	}
-	
-	/** @type {Set<ASTNode>} */
-	const descendants = new Set();
-	/** @type {ASTNode[]} */
-	const stack = [targetNode];
-	
-	while (stack.length) {
-		const currentNode = stack.pop();
-		const childNodes = currentNode?.childNodes || [];
-		
-		for (let i = 0; i < childNodes.length; i++) {
-			const childNode = childNodes[i];
-			if (!descendants.has(childNode)) {
-				descendants.add(childNode);
-				stack.push(childNode);
-			}
-		}
-	}
-	
-	// Cache results as array on the target node for future calls
-	const descendantsArray = [...descendants];
-	return targetNode.descendants = descendantsArray;
+  // Input validation
+  if (!targetNode) {
+    return [];
+  }
+
+  // Return cached result if available
+  if (targetNode.descendants) {
+    return targetNode.descendants;
+  }
+
+  /** @type {Set<ASTNode>} */
+  const descendants = new Set();
+  /** @type {ASTNode[]} */
+  const stack = [targetNode];
+
+  while (stack.length) {
+    const currentNode = stack.pop();
+    const childNodes = currentNode?.childNodes || [];
+
+    for (let i = 0; i < childNodes.length; i++) {
+      const childNode = childNodes[i];
+      if (!descendants.has(childNode)) {
+        descendants.add(childNode);
+        stack.push(childNode);
+      }
+    }
+  }
+
+  // Cache results as array on the target node for future calls
+  const descendantsArray = [...descendants];
+  return targetNode.descendants = descendantsArray;
 }

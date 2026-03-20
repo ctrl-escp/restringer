@@ -17,59 +17,59 @@ import {evalInVm} from '../utils/evalInVm.js';
  * doesBinaryExpressionContainOnlyLiterals(parseCode('!true').body[0].expression);
  * doesBinaryExpressionContainOnlyLiterals(parseCode('true ? 1 : 2').body[0].expression);
  *
- * // Returns false  
+ * // Returns false
  * doesBinaryExpressionContainOnlyLiterals(parseCode('1 + x').body[0].expression);
  * doesBinaryExpressionContainOnlyLiterals(parseCode('func()').body[0].expression);
  */
 export function doesBinaryExpressionContainOnlyLiterals(expression) {
-	// Early return for null/undefined to prevent errors
-	if (!expression || !expression.type) {
-		return false;
-	}
+  // Early return for null/undefined to prevent errors
+  if (!expression || !expression.type) {
+    return false;
+  }
 
-	switch (expression.type) {
-		case 'BinaryExpression':
-			// Both operands must contain only literals
-			return doesBinaryExpressionContainOnlyLiterals(expression.left) &&
+  switch (expression.type) {
+    case 'BinaryExpression':
+      // Both operands must contain only literals
+      return doesBinaryExpressionContainOnlyLiterals(expression.left) &&
 				doesBinaryExpressionContainOnlyLiterals(expression.right);
-			
-		case 'UnaryExpression':
-			// Argument must contain only literals (e.g., !true, -5, +"hello")
-			return doesBinaryExpressionContainOnlyLiterals(expression.argument);
-			
-		case 'UpdateExpression':
-			// UpdateExpression requires lvalue (variable/property), never a literal
-			// Valid: ++x, invalid: ++5 (flast won't generate UpdateExpression for invalid syntax)
-			return false;
-			
-		case 'LogicalExpression':
-			// Both operands must contain only literals (e.g., true && false, 1 || 2)
-			return doesBinaryExpressionContainOnlyLiterals(expression.left) &&
+
+    case 'UnaryExpression':
+      // Argument must contain only literals (e.g., !true, -5, +"hello")
+      return doesBinaryExpressionContainOnlyLiterals(expression.argument);
+
+    case 'UpdateExpression':
+      // UpdateExpression requires lvalue (variable/property), never a literal
+      // Valid: ++x, invalid: ++5 (flast won't generate UpdateExpression for invalid syntax)
+      return false;
+
+    case 'LogicalExpression':
+      // Both operands must contain only literals (e.g., true && false, 1 || 2)
+      return doesBinaryExpressionContainOnlyLiterals(expression.left) &&
 				doesBinaryExpressionContainOnlyLiterals(expression.right);
-			
-		case 'ConditionalExpression':
-			// All three parts must contain only literals (e.g., true ? 1 : 2)
-			return doesBinaryExpressionContainOnlyLiterals(expression.test) &&
+
+    case 'ConditionalExpression':
+      // All three parts must contain only literals (e.g., true ? 1 : 2)
+      return doesBinaryExpressionContainOnlyLiterals(expression.test) &&
 				doesBinaryExpressionContainOnlyLiterals(expression.consequent) &&
 				doesBinaryExpressionContainOnlyLiterals(expression.alternate);
-			
-		case 'SequenceExpression':
-			// All expressions in sequence must contain only literals (e.g., (1, 2, 3))
-			for (let i = 0; i < expression.expressions.length; i++) {
-				if (!doesBinaryExpressionContainOnlyLiterals(expression.expressions[i])) {
-					return false;
-				}
-			}
-			return true;
-			
-		case 'Literal':
-			// Base case: literals are always literal-only
-			return true;
-			
-		default:
-			// Any other node type (Identifier, CallExpression, etc.) is not literal-only
-			return false;
-	}
+
+    case 'SequenceExpression':
+      // All expressions in sequence must contain only literals (e.g., (1, 2, 3))
+      for (let i = 0; i < expression.expressions.length; i++) {
+        if (!doesBinaryExpressionContainOnlyLiterals(expression.expressions[i])) {
+          return false;
+        }
+      }
+      return true;
+
+    case 'Literal':
+      // Base case: literals are always literal-only
+      return true;
+
+    default:
+      // Any other node type (Identifier, CallExpression, etc.) is not literal-only
+      return false;
+  }
 }
 
 /**
@@ -80,17 +80,17 @@ export function doesBinaryExpressionContainOnlyLiterals(expression) {
  * @return {ASTNode[]} Array of BinaryExpression nodes ready for evaluation
  */
 export function resolveDefiniteBinaryExpressionsMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.BinaryExpression;
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		
-		if (doesBinaryExpressionContainOnlyLiterals(n) && candidateFilter(n)) {
-			matches.push(n);
-		}
-	}
-	return matches;
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.BinaryExpression;
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+
+    if (doesBinaryExpressionContainOnlyLiterals(n) && candidateFilter(n)) {
+      matches.push(n);
+    }
+  }
+  return matches;
 }
 
 /**
@@ -101,33 +101,33 @@ export function resolveDefiniteBinaryExpressionsMatch(arb, candidateFilter = () 
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveDefiniteBinaryExpressionsTransform(arb, matches) {
-	if (!matches.length) return arb;
-	
-	const sharedSb = new Sandbox();
-	
-	for (let i = 0; i < matches.length; i++) {
-		const n = matches[i];
-		const replacementNode = evalInVm(n.src, sharedSb);
-		
-		if (replacementNode !== evalInVm.BAD_VALUE) {
-			try {
-				// Handle negative number edge case: when evaluating expressions like '5 - 10',
-				// the result may be a UnaryExpression with '-5' instead of a Literal with value -5.
-				// This ensures numeric operations remain as proper numeric literals.
-				if (replacementNode.type === 'UnaryExpression' && 
-					typeof n?.left?.value === 'number' && 
+  if (!matches.length) return arb;
+
+  const sharedSb = new Sandbox();
+
+  for (let i = 0; i < matches.length; i++) {
+    const n = matches[i];
+    const replacementNode = evalInVm(n.src, sharedSb);
+
+    if (replacementNode !== evalInVm.BAD_VALUE) {
+      try {
+        // Handle negative number edge case: when evaluating expressions like '5 - 10',
+        // the result may be a UnaryExpression with '-5' instead of a Literal with value -5.
+        // This ensures numeric operations remain as proper numeric literals.
+        if (replacementNode.type === 'UnaryExpression' &&
+					typeof n?.left?.value === 'number' &&
 					typeof n?.right?.value === 'number') {
-					const v = parseInt(replacementNode.argument.raw);
-					replacementNode.argument.value = v;
-					replacementNode.argument.raw = `${v}`;
-				}
-				arb.markNode(n, replacementNode);
-			} catch (e) {
-				logger.debug(e.message);
-			}
-		}
-	}
-	return arb;
+          const v = parseInt(replacementNode.argument.raw);
+          replacementNode.argument.value = v;
+          replacementNode.argument.raw = `${v}`;
+        }
+        arb.markNode(n, replacementNode);
+      } catch (e) {
+        logger.debug(e.message);
+      }
+    }
+  }
+  return arb;
 }
 
 /**
@@ -139,6 +139,6 @@ export function resolveDefiniteBinaryExpressionsTransform(arb, matches) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveDefiniteBinaryExpressions(arb, candidateFilter = () => true) {
-	const matches = resolveDefiniteBinaryExpressionsMatch(arb, candidateFilter);
-	return resolveDefiniteBinaryExpressionsTransform(arb, matches);
+  const matches = resolveDefiniteBinaryExpressionsMatch(arb, candidateFilter);
+  return resolveDefiniteBinaryExpressionsTransform(arb, matches);
 }

@@ -21,5 +21,5 @@
  * // getObjType(function() {}) => 'Function'
  */
 export function getObjType(unknownObject) {
-	return ({}).toString.call(unknownObject).slice(8, -1);
+  return ({}).toString.call(unknownObject).slice(8, -1);
 }

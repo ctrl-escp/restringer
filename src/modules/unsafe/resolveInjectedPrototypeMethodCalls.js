@@ -10,37 +10,37 @@ const VALID_PROTOTYPE_FUNCTION_TYPES = ['FunctionExpression', 'ArrowFunctionExpr
 
 /**
  * Identifies AssignmentExpression nodes that assign functions to prototype properties.
- * Matches patterns like `String.prototype.method = function() {...}`, `Obj.prototype.prop = () => value`, 
+ * Matches patterns like `String.prototype.method = function() {...}`, `Obj.prototype.prop = () => value`,
  * or `Obj.prototype.prop = identifier`. Arrow functions work fine when they don't rely on 'this' binding.
  * @param {Arborist} arb - The Arborist instance
  * @param {Function} [candidateFilter] - Optional filter for candidates
  * @return {Object[]} Array of match objects containing prototype assignments and method details
  */
 export function resolveInjectedPrototypeMethodCallsMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.AssignmentExpression;
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.AssignmentExpression;
 
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
 
-		// Must be assignment to a prototype property with a function value
-		if (n.left?.type === 'MemberExpression' &&
+    // Must be assignment to a prototype property with a function value
+    if (n.left?.type === 'MemberExpression' &&
 			n.left.object?.type === 'MemberExpression' &&
-			'prototype' === (n.left.object.property?.name || n.left.object.property?.value) &&
+			(n.left.object.property?.name || n.left.object.property?.value) === 'prototype' &&
 			n.operator === '=' &&
 			VALID_PROTOTYPE_FUNCTION_TYPES.includes(n.right?.type) &&
 			candidateFilter(n)) {
 
-			const methodName = n.left.property?.name || n.left.property?.value;
-			if (methodName) {
-				matches.push({
-					assignmentNode: n,
-					methodName: methodName
-				});
-			}
-		}
-	}
-	return matches;
+      const methodName = n.left.property?.name || n.left.property?.value;
+      if (methodName) {
+        matches.push({
+          assignmentNode: n,
+          methodName,
+        });
+      }
+    }
+  }
+  return matches;
 }
 
 /**
@@ -51,40 +51,40 @@ export function resolveInjectedPrototypeMethodCallsMatch(arb, candidateFilter = 
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveInjectedPrototypeMethodCallsTransform(arb, matches) {
-	if (!matches.length) return arb;
+  if (!matches.length) return arb;
 
-	// Process each prototype method assignment
-	for (let i = 0; i < matches.length; i++) {
-		const match = matches[i];
-		
-		try {
-			// Build execution context including the prototype assignment
-			const context = getDeclarationWithContext(match.assignmentNode);
-			const contextSb = new Sandbox();
-			contextSb.run(createOrderedSrc(context));
+  // Process each prototype method assignment
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
 
-			// Find and resolve calls to this injected method
-			const callNodes = arb.ast[0].typeMap.CallExpression;
-			for (let j = 0; j < callNodes.length; j++) {
-				const callNode = callNodes[j];
-				
-				// Check if this call uses the injected prototype method
-				if (callNode.callee?.type === 'MemberExpression' &&
+    try {
+      // Build execution context including the prototype assignment
+      const context = getDeclarationWithContext(match.assignmentNode);
+      const contextSb = new Sandbox();
+      contextSb.run(createOrderedSrc(context));
+
+      // Find and resolve calls to this injected method
+      const callNodes = arb.ast[0].typeMap.CallExpression;
+      for (let j = 0; j < callNodes.length; j++) {
+        const callNode = callNodes[j];
+
+        // Check if this call uses the injected prototype method
+        if (callNode.callee?.type === 'MemberExpression' &&
 					(callNode.callee.property?.name === match.methodName ||
 					 callNode.callee.property?.value === match.methodName)) {
-					
-					// Evaluate the method call in the prepared context
-					const replacementNode = evalInVm(`\n${createOrderedSrc([callNode])}`, contextSb);
-					if (replacementNode !== evalInVm.BAD_VALUE) {
-						arb.markNode(callNode, replacementNode);
-					}
-				}
-			}
-		} catch (e) {
-			logger.debug(`[-] Error resolving injected prototype method '${match.methodName}': ${e.message}`);
-		}
-	}
-	return arb;
+
+          // Evaluate the method call in the prepared context
+          const replacementNode = evalInVm(`\n${createOrderedSrc([callNode])}`, contextSb);
+          if (replacementNode !== evalInVm.BAD_VALUE) {
+            arb.markNode(callNode, replacementNode);
+          }
+        }
+      }
+    } catch (e) {
+      logger.debug(`[-] Error resolving injected prototype method '${match.methodName}': ${e.message}`);
+    }
+  }
+  return arb;
 }
 
 /**
@@ -96,6 +96,6 @@ export function resolveInjectedPrototypeMethodCallsTransform(arb, matches) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveInjectedPrototypeMethodCalls(arb, candidateFilter = () => true) {
-	const matches = resolveInjectedPrototypeMethodCallsMatch(arb, candidateFilter);
-	return resolveInjectedPrototypeMethodCallsTransform(arb, matches);
+  const matches = resolveInjectedPrototypeMethodCallsMatch(arb, candidateFilter);
+  return resolveInjectedPrototypeMethodCallsTransform(arb, matches);
 }

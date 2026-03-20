@@ -23,20 +23,20 @@
  * // isNodeInRanges(node, [[6, 10]]) => false (node starts before range)
  */
 export function isNodeInRanges(targetNode, ranges) {
-	// Early return for empty ranges array - no ranges means node is not in any range
-	if (!ranges.length) {
-		return false;
-	}
+  // Early return for empty ranges array - no ranges means node is not in any range
+  if (!ranges.length) {
+    return false;
+  }
 
-	const [nodeStart, nodeEnd] = targetNode.range;
+  const [nodeStart, nodeEnd] = targetNode.range;
 
-	// Check if node range is completely contained within any provided range
-	for (let i = 0; i < ranges.length; i++) {
-		const [rangeStart, rangeEnd] = ranges[i];
-		if (nodeStart >= rangeStart && nodeEnd <= rangeEnd) {
-			return true;
-		}
-	}
+  // Check if node range is completely contained within any provided range
+  for (let i = 0; i < ranges.length; i++) {
+    const [rangeStart, rangeEnd] = ranges[i];
+    if (nodeStart >= rangeStart && nodeEnd <= rangeEnd) {
+      return true;
+    }
+  }
 
-	return false;
+  return false;
 }

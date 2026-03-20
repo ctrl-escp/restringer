@@ -13,20 +13,20 @@ import {getDeclarationWithContext} from '../utils/getDeclarationWithContext.js';
  * @return {ASTNode[]} Array of eval CallExpression nodes ready for resolution
  */
 export function resolveEvalCallsOnNonLiteralsMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.CallExpression;
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		// Only process eval calls with exactly one non-literal argument
-		if (n.callee.name === 'eval' &&
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.CallExpression;
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+    // Only process eval calls with exactly one non-literal argument
+    if (n.callee.name === 'eval' &&
 			n.arguments.length === 1 &&
 			n.arguments[0].type !== 'Literal' &&
 			candidateFilter(n)) {
-			matches.push(n);
-		}
-	}
-	return matches;
+      matches.push(n);
+    }
+  }
+  return matches;
 }
 
 /**
@@ -38,57 +38,57 @@ export function resolveEvalCallsOnNonLiteralsMatch(arb, candidateFilter = () => 
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveEvalCallsOnNonLiteralsTransform(arb, matches) {
-	if (!matches.length) return arb;
-	
-	const sharedSb = new Sandbox();
-	
-	for (let i = 0; i < matches.length; i++) {
-		const n = matches[i];
-		
-		// Gather context nodes that might be referenced by the eval argument
-		const contextNodes = getDeclarationWithContext(n, true);
-		
-		// Remove any nodes that are part of the eval expression itself to avoid circular references
-		const possiblyRedundantNodes = [n, n?.parentNode, n?.parentNode?.parentNode];
-		for (let j = 0; j < possiblyRedundantNodes.length; j++) {
-			const redundantNode = possiblyRedundantNodes[j];
-			const index = contextNodes.indexOf(redundantNode);
-			if (index !== -1) {
-				contextNodes.splice(index, 1);
-			}
-		}
-		
-		// Build evaluation context: dependencies + argument assignment + return value
-		const context = contextNodes.length ? createOrderedSrc(contextNodes) : '';
-		const src = `${context}\n;${createOrderedSrc([n.arguments[0]])}\n;`;
-		
-		const newNode = evalInVm(src, sharedSb);
-		const targetNode = n.parentNode.type === 'ExpressionStatement' ? n.parentNode : n;
-		let replacementNode = newNode;
-		
-		// If result is a literal string, try to parse it as JavaScript code
-		try {
-			if (newNode.type === 'Literal') {
-				try {
-					replacementNode = parseCode(newNode.value);
-				} catch {
-					// Handle malformed code by adding newlines after closing brackets
-					// (except when part of regex patterns like "/}/")
-					replacementNode = parseCode(newNode.value.replace(/([)}])(?!\/)/g, '$1\n'));
-				} finally {
-					// Fallback to unparsed literal if parsing results in empty program
-					if (!replacementNode.body.length) replacementNode = newNode;
-				}
-			}
-		} catch {
-			// If all parsing attempts fail, keep the original evaluated result
-		}
-		
-		if (replacementNode !== evalInVm.BAD_VALUE) {
-			arb.markNode(targetNode, replacementNode);
-		}
-	}
-	return arb;
+  if (!matches.length) return arb;
+
+  const sharedSb = new Sandbox();
+
+  for (let i = 0; i < matches.length; i++) {
+    const n = matches[i];
+
+    // Gather context nodes that might be referenced by the eval argument
+    const contextNodes = getDeclarationWithContext(n, true);
+
+    // Remove any nodes that are part of the eval expression itself to avoid circular references
+    const possiblyRedundantNodes = [n, n?.parentNode, n?.parentNode?.parentNode];
+    for (let j = 0; j < possiblyRedundantNodes.length; j++) {
+      const redundantNode = possiblyRedundantNodes[j];
+      const index = contextNodes.indexOf(redundantNode);
+      if (index !== -1) {
+        contextNodes.splice(index, 1);
+      }
+    }
+
+    // Build evaluation context: dependencies + argument assignment + return value
+    const context = contextNodes.length ? createOrderedSrc(contextNodes) : '';
+    const src = `${context}\n;${createOrderedSrc([n.arguments[0]])}\n;`;
+
+    const newNode = evalInVm(src, sharedSb);
+    const targetNode = n.parentNode.type === 'ExpressionStatement' ? n.parentNode : n;
+    let replacementNode = newNode;
+
+    // If result is a literal string, try to parse it as JavaScript code
+    try {
+      if (newNode.type === 'Literal') {
+        try {
+          replacementNode = parseCode(newNode.value);
+        } catch {
+          // Handle malformed code by adding newlines after closing brackets
+          // (except when part of regex patterns like "/}/")
+          replacementNode = parseCode(newNode.value.replace(/([)}])(?!\/)/g, '$1\n'));
+        } finally {
+          // Fallback to unparsed literal if parsing results in empty program
+          if (!replacementNode.body.length) replacementNode = newNode;
+        }
+      }
+    } catch {
+      // If all parsing attempts fail, keep the original evaluated result
+    }
+
+    if (replacementNode !== evalInVm.BAD_VALUE) {
+      arb.markNode(targetNode, replacementNode);
+    }
+  }
+  return arb;
 }
 
 /**
@@ -100,6 +100,6 @@ export function resolveEvalCallsOnNonLiteralsTransform(arb, matches) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveEvalCallsOnNonLiterals(arb, candidateFilter = () => true) {
-	const matches = resolveEvalCallsOnNonLiteralsMatch(arb, candidateFilter);
-	return resolveEvalCallsOnNonLiteralsTransform(arb, matches);
+  const matches = resolveEvalCallsOnNonLiteralsMatch(arb, candidateFilter);
+  return resolveEvalCallsOnNonLiteralsTransform(arb, matches);
 }
