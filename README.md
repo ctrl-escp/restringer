@@ -1,6 +1,6 @@
 # REstringer
 
-[![Node.js CI](https://github.com/HumanSecurity/restringer/actions/workflows/node.js.yml/badge.svg?branch=main)](https://github.com/HumanSecurity/restringer/actions/workflows/node.js.yml)
+[![Node.js CI](https://github.com/ctrl-escp/restringer/actions/workflows/node.js.yml/badge.svg?branch=main)](https://github.com/ctrl-escp/restringer/actions/workflows/node.js.yml)
 [![Downloads](https://img.shields.io/npm/dm/restringer.svg?maxAge=43200)](https://www.npmjs.com/package/restringer)
 [![npm version](https://badge.fury.io/js/restringer.svg)](https://badge.fury.io/js/restringer)
 
@@ -8,7 +8,7 @@
 
 REstringer automatically detects obfuscation patterns and applies targeted deobfuscation techniques to restore readable JavaScript code. It handles various obfuscation methods while respecting scope limitations and maintaining code functionality.
 
-📧 **Contact**: For questions and suggestions, open an issue or find me on Twitter / X - Ben Baryo - [@ctrl__esc](https://twitter.com/ctrl__esc)
+📧 **Contact**: For questions and suggestions, open an issue or find me on [LinkedIn - Ben Baryo](https://www.linkedin.com/in/bbaryo/)
 
 ---
 
@@ -32,7 +32,7 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 
 ## Features
 
-✨ **Automatic Obfuscation Detection**: Uses [Obfuscation Detector](https://github.com/HumanSecurity/obfuscation-detector) to identify specific obfuscation types
+✨ **Automatic Obfuscation Detection**: Uses [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) to identify specific obfuscation types
 
 🔧 **Modular Architecture**: 40+ deobfuscation modules organized into safe and unsafe categories
 
@@ -63,7 +63,7 @@ npm install restringer
 
 ### Development Installation
 ```bash
-git clone https://github.com/HumanSecurity/restringer.git
+git clone https://github.com/ctrl-escp/restringer.git
 cd restringer
 npm install
 ```
@@ -317,8 +317,8 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 - 🤝 [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute to REstringer
 
 ### Related Projects  
-- 🔍 [Obfuscation Detector](https://github.com/HumanSecurity/obfuscation-detector) - Automatic obfuscation detection
-- 🌳 [flAST](https://github.com/HumanSecurity/flast) - AST manipulation utilities
+- 🔍 [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) - Automatic obfuscation detection
+- 🌳 [flAST](https://github.com/ctrl-escp/flast) - AST manipulation utilities
 
 ### Research & Blog Posts
 
@@ -331,18 +331,10 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 - 🔐 [Caesar Plus Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/deobfuscating-caesar/) - Deep dive into Caesar cipher obfuscation
 
 ### Community
-- 💬 [GitHub Issues](https://github.com/HumanSecurity/restringer/issues) - Bug reports and feature requests  
+- 💬 [GitHub Issues](https://github.com/ctrl-escp/restringer/issues) - Bug reports and feature requests  
 - 🐦 [Twitter @ctrl__esc](https://twitter.com/ctrl__esc) - Updates and discussions
 ---
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
-
-<div align="center">
-
-**Made with ❤️ by [HUMAN Security](https://www.HumanSecurity.com/)**
-
-</div>

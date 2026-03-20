@@ -49,7 +49,7 @@ Processors are **obfuscation-specific handlers** that:
 ### When are Processors Used?
 
 Processors are **lazily loaded** only when:
-1. The [Obfuscation Detector](https://github.com/HumanSecurity/obfuscation-detector) identifies a specific obfuscation type
+1. The [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) identifies a specific obfuscation type
 2. Manual processor selection is specified
 3. Custom deobfuscation pipelines are created
 
@@ -501,7 +501,7 @@ For detailed guidelines on contributing to processors, see our [Contributing Gui
 
 ## Resources
 
-- 🔍 [Obfuscation Detector](https://github.com/HumanSecurity/obfuscation-detector) - Pattern recognition system
-- 🌳 [flAST Documentation](https://github.com/HumanSecurity/flast) - AST manipulation utilities  
+- 🔍 [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) - Pattern recognition system
+- 🌳 [flAST Documentation](https://github.com/ctrl-escp/flast) - AST manipulation utilities  
 - 📖 [Main REstringer README](../../README.md) - Complete project documentation
 - 🤝 [Contributing Guide](../../docs/CONTRIBUTING.md) - How to contribute to REstringer

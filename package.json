@@ -32,7 +32,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HumanSecurity/restringer.git"
+    "url": "git+https://github.com/ctrl-escp/restringer.git"
   },
   "keywords": [
     "obfuscation",
@@ -42,12 +42,12 @@
     "javaScript",
     "AST"
   ],
-  "author": "Ben Baryo (ben.baryo@humansecurity.com)",
+  "author": "Ben Baryo (ben.baryo@gmail.com)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/HumanSecurity/restringer/issues"
+    "url": "https://github.com/ctrl-escp/restringer/issues"
   },
-  "homepage": "https://github.com/HumanSecurity/restringer#readme",
+  "homepage": "https://github.com/ctrl-escp/restringer#readme",
   "devDependencies": {
     "@babel/eslint-parser": "^7.28.6",
     "@babel/plugin-syntax-import-assertions": "^7.27.6",

@@ -427,18 +427,14 @@ A successfully refactored module should:
 ## Getting Help
 
 - 💬 **GitHub Issues** - Ask questions or report issues
-- 🐦 **Twitter / X** - Reach out to Ben Baryo [@ctrl__esc](https://twitter.com/ctrl__esc)
+- 🐦 **LinkedIn** - Reach out to [Ben Baryo](https://www.linkedin.com/in/bbaryo/)
 - 📖 **Documentation** - Check the [main README](README.md) and [processors guide](src/processors/README.md)
 
 ---
 
 ## Resources
 
-- 🔍 [Obfuscation Detector](https://github.com/HumanSecurity/obfuscation-detector) - Pattern recognition system
-- 🌳 [flAST Documentation](https://github.com/HumanSecurity/flast) - AST manipulation utilities  
+- 🔍 [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) - Pattern recognition system
+- 🌳 [flAST Documentation](https://github.com/ctrl-escp/flast) - AST manipulation utilities  
 - 📖 [Main README](README.md) - Complete project documentation
 - 📖 [Processors Guide](src/processors/README.md) - Detailed processor documentation
-
----
-
-**Made with ❤️ by [HUMAN Security](https://www.HumanSecurity.com/)**
