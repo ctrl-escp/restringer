@@ -145,11 +145,11 @@ export class REstringer {
   /**
 	 * Run specific deobfuscation which must run before or after the main deobfuscation loop
 	 * in order to successfully complete deobfuscation.
-	 * @param {Array<Function|string>} processors An array of either imported deobfuscation methods or the name of internal methods.
+	 * @param {Array<Function|string>} processorsArr An array of either imported deobfuscation methods or the name of internal methods.
 	 */
-  _runProcessors(processors) {
-    for (let i = 0; i < processors.length; i++) {
-      const processor = processors[i];
+  _runProcessors(processorsArr) {
+    for (let i = 0; i < processorsArr.length; i++) {
+      const processor = processorsArr[i];
       this.script = applyIteratively(this.script, [processor], 1);
     }
   }
