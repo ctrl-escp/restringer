@@ -49,7 +49,7 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 ## Installation
 
 ### Requirements
-- **Node.js v20+** (v22+ recommended)
+- **Node.js v22+**
 
 ### Global Installation (CLI)
 ```bash
