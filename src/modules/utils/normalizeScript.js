@@ -25,9 +25,9 @@ import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotO
  * // Output: obj.method(); true;
  */
 export function normalizeScript(script) {
-	return applyIteratively(script, [
-		normalizeComputed.default,
-		normalizeRedundantNotOperator.default,
-		normalizeEmptyStatements.default,
-	]);
+  return applyIteratively(script, [
+    normalizeComputed.default,
+    normalizeRedundantNotOperator.default,
+    normalizeEmptyStatements.default,
+  ]);
 }

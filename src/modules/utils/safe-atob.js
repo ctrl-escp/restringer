@@ -14,5 +14,5 @@
  * // atob('YWJjMTIz') => 'abc123'
  */
 export function atob(val) {
-	return Buffer.from(val, 'base64').toString();
+  return Buffer.from(val, 'base64').toString();
 }

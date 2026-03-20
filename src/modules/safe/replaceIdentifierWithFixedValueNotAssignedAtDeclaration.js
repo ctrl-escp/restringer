@@ -13,7 +13,7 @@ const FOR_STATEMENT_REGEX = /For.*Statement/;
  * @return {boolean} True if reference is a for-loop iterator
  */
 function isForLoopIterator(ref) {
-	return FOR_STATEMENT_REGEX.test(ref.parentNode.type) && ref.parentKey === 'left';
+  return FOR_STATEMENT_REGEX.test(ref.parentNode.type) && ref.parentKey === 'left';
 }
 
 /**
@@ -27,15 +27,15 @@ function isForLoopIterator(ref) {
  * @return {boolean} True if reference is in conditional context
  */
 function isInConditionalContext(ref) {
-	// Check up to 3 levels up the AST for ConditionalExpression
-	let currentNode = ref.parentNode;
-	for (let depth = 0; depth < 3 && currentNode; depth++) {
-		if (currentNode.type === 'ConditionalExpression') {
-			return true;
-		}
-		currentNode = currentNode.parentNode;
-	}
-	return false;
+  // Check up to 3 levels up the AST for ConditionalExpression
+  let currentNode = ref.parentNode;
+  for (let depth = 0; depth < 3 && currentNode; depth++) {
+    if (currentNode.type === 'ConditionalExpression') {
+      return true;
+    }
+    currentNode = currentNode.parentNode;
+  }
+  return false;
 }
 
 /**
@@ -48,14 +48,14 @@ function isInConditionalContext(ref) {
  * @return {Object|null} The assignment reference or null
  */
 function getSingleAssignmentReference(n) {
-	if (!n.references?.length) return null;
-	
-	const assignmentRefs = n.references.filter(r =>
-		r.parentNode.type === 'AssignmentExpression' &&
-		getMainDeclaredObjectOfMemberExpression(r.parentNode.left) === r
-	);
-	
-	return assignmentRefs.length === 1 ? assignmentRefs[0] : null;
+  if (!n.references?.length) return null;
+
+  const assignmentRefs = n.references.filter(r =>
+    r.parentNode.type === 'AssignmentExpression' &&
+		getMainDeclaredObjectOfMemberExpression(r.parentNode.left) === r,
+  );
+
+  return assignmentRefs.length === 1 ? assignmentRefs[0] : null;
 }
 
 /**
@@ -77,36 +77,36 @@ function getSingleAssignmentReference(n) {
  * @return {ASTNode[]} Array of identifier nodes that can be safely replaced
  */
 export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationMatch(arb, candidateFilter = () => true) {
-	// Direct access to typeMap without spread operator for better performance
-	const relevantNodes = arb.ast[0].typeMap.Identifier;
-	const matches = [];
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		
-		// Optimized condition ordering: cheapest checks first for better performance
-		if (candidateFilter(n) &&
+  // Direct access to typeMap without spread operator for better performance
+  const relevantNodes = arb.ast[0].typeMap.Identifier;
+  const matches = [];
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+
+    // Optimized condition ordering: cheapest checks first for better performance
+    if (candidateFilter(n) &&
 			n.parentNode?.type === 'VariableDeclarator' &&
 			!n.parentNode.init && // Variable declared without initial value
 			n.references.length) {
-			
-			// Check for exactly one assignment to a literal value
-			const assignmentRef = getSingleAssignmentReference(n);
-			if (assignmentRef && assignmentRef.parentNode.right.type === 'Literal') {
-				
-				// Ensure no unsafe usage patterns exist
-				const hasUnsafeReferences = n.references.some(r =>
-					isForLoopIterator(r) || isInConditionalContext(r)
-				);
-				
-				if (!hasUnsafeReferences) {
-					matches.push(n);
-				}
-			}
-		}
-	}
-	
-	return matches;
+
+      // Check for exactly one assignment to a literal value
+      const assignmentRef = getSingleAssignmentReference(n);
+      if (assignmentRef && assignmentRef.parentNode.right.type === 'Literal') {
+
+        // Ensure no unsafe usage patterns exist
+        const hasUnsafeReferences = n.references.some(r =>
+          isForLoopIterator(r) || isInConditionalContext(r),
+        );
+
+        if (!hasUnsafeReferences) {
+          matches.push(n);
+        }
+      }
+    }
+  }
+
+  return matches;
 }
 
 /**
@@ -121,42 +121,42 @@ export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationMatch(arb
  * @return {Arborist} The modified arborist instance
  */
 export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationTransform(arb, n) {
-	// Get the single assignment reference (validated in match function)
-	const assignmentRef = getSingleAssignmentReference(n);
-	const valueNode = assignmentRef.parentNode.right;
-	
-	// Get all references except the assignment itself
-	const referencesToReplace = n.references.filter(r => r !== assignmentRef);
-	
-	// Additional safety check: ensure references aren't modified in complex ways
-	if (!areReferencesModified(arb.ast, referencesToReplace)) {
-		for (let i = 0; i < referencesToReplace.length; i++) {
-			const ref = referencesToReplace[i];
-			
-			// Skip function calls where identifier is the callee
-			// Example: let func; func = someFunction; func(); // Don't replace func()
-			if (ref.parentNode.type === 'CallExpression' && ref.parentKey === 'callee') {
-				continue;
-			}
+  // Get the single assignment reference (validated in match function)
+  const assignmentRef = getSingleAssignmentReference(n);
+  const valueNode = assignmentRef.parentNode.right;
 
-			// Check if the reference is in the same scope as the assignment
-			let scopesMatches = true;
-			for (let j = 0; j < assignmentRef.lineage.length; j++) {
-				if (assignmentRef.lineage[j] !== ref.lineage[j]) {
-					scopesMatches = false;
-					break;
-				}
-			}
+  // Get all references except the assignment itself
+  const referencesToReplace = n.references.filter(r => r !== assignmentRef);
 
-			if (scopesMatches) {
-				// Replace the reference with the literal value
-				arb.markNode(ref, valueNode);
-			}
+  // Additional safety check: ensure references aren't modified in complex ways
+  if (!areReferencesModified(arb.ast, referencesToReplace)) {
+    for (let i = 0; i < referencesToReplace.length; i++) {
+      const ref = referencesToReplace[i];
 
-		}
-	}
-	
-	return arb;
+      // Skip function calls where identifier is the callee
+      // Example: let func; func = someFunction; func(); // Don't replace func()
+      if (ref.parentNode.type === 'CallExpression' && ref.parentKey === 'callee') {
+        continue;
+      }
+
+      // Check if the reference is in the same scope as the assignment
+      let scopesMatches = true;
+      for (let j = 0; j < assignmentRef.lineage.length; j++) {
+        if (assignmentRef.lineage[j] !== ref.lineage[j]) {
+          scopesMatches = false;
+          break;
+        }
+      }
+
+      if (scopesMatches) {
+        // Replace the reference with the literal value
+        arb.markNode(ref, valueNode);
+      }
+
+    }
+  }
+
+  return arb;
 }
 
 /**
@@ -181,13 +181,13 @@ export function replaceIdentifierWithFixedValueNotAssignedAtDeclarationTransform
  * @return {Arborist} The modified arborist instance
  */
 export default function replaceIdentifierWithFixedValueNotAssignedAtDeclaration(arb, candidateFilter = () => true) {
-	// Find all matching identifier nodes
-	const matches = replaceIdentifierWithFixedValueNotAssignedAtDeclarationMatch(arb, candidateFilter);
-	
-	// Transform each matching node
-	for (let i = 0; i < matches.length; i++) {
-		arb = replaceIdentifierWithFixedValueNotAssignedAtDeclarationTransform(arb, matches[i]);
-	}
-	
-	return arb;
+  // Find all matching identifier nodes
+  const matches = replaceIdentifierWithFixedValueNotAssignedAtDeclarationMatch(arb, candidateFilter);
+
+  // Transform each matching node
+  for (let i = 0; i < matches.length; i++) {
+    arb = replaceIdentifierWithFixedValueNotAssignedAtDeclarationTransform(arb, matches[i]);
+  }
+
+  return arb;
 }

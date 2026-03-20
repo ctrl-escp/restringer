@@ -14,5 +14,5 @@
  * // btoa('abc123') => 'YWJjMTIz'
  */
 export function btoa(val) {
-	return Buffer.from(val).toString('base64');
+  return Buffer.from(val).toString('base64');
 }

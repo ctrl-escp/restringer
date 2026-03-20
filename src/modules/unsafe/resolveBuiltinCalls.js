@@ -8,7 +8,7 @@ import {SKIP_IDENTIFIERS, SKIP_PROPERTIES} from '../config.js';
 const AVAILABLE_SAFE_IMPLEMENTATIONS = Object.keys(safeImplementations);
 // Builtin functions that shouldn't be resolved in the deobfuscation context.
 const SKIP_BUILTIN_FUNCTIONS = [
-	'Function', 'eval', 'Array', 'Object', 'fetch', 'XMLHttpRequest', 'Promise', 'console', 'performance', '$',
+  'Function', 'eval', 'Array', 'Object', 'fetch', 'XMLHttpRequest', 'Promise', 'console', 'performance', '$',
 ];
 
 /**
@@ -20,46 +20,46 @@ const SKIP_BUILTIN_FUNCTIONS = [
  * @return {ASTNode[]} Array of nodes that match the criteria
  */
 export function resolveBuiltinCallsMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.MemberExpression
-		.concat(arb.ast[0].typeMap.CallExpression)
-		.concat(arb.ast[0].typeMap.Identifier);
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		if (!candidateFilter(n)) continue;
-		
-		// Skip user-defined functions and objects, this expressions, constructor access
-		if (n.callee?.declNode || n?.callee?.object?.declNode ||
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.MemberExpression
+    .concat(arb.ast[0].typeMap.CallExpression)
+    .concat(arb.ast[0].typeMap.Identifier);
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+    if (!candidateFilter(n)) continue;
+
+    // Skip user-defined functions and objects, this expressions, constructor access
+    if (n.callee?.declNode || n?.callee?.object?.declNode ||
 			'ThisExpression' === (n.callee?.object?.type || n.callee?.type) ||
 			'constructor' === (n.callee?.property?.name || n.callee?.property?.value)) {
-			continue;
-		}
-				
-		// Check for safe implementation calls
-		if (n.type === 'CallExpression' && AVAILABLE_SAFE_IMPLEMENTATIONS.includes(n.callee.name)) {
-			matches.push(n);
-		}
-		
-		// Check for calls with only literal arguments
-		else if (n.type === 'CallExpression' && !n.arguments.some(a => a.type !== 'Literal')) {
-			// Check if callee is builtin identifier
-			if (n.callee.type === 'Identifier' && !n.callee.declNode && 
+      continue;
+    }
+
+    // Check for safe implementation calls
+    if (n.type === 'CallExpression' && AVAILABLE_SAFE_IMPLEMENTATIONS.includes(n.callee.name)) {
+      matches.push(n);
+    }
+
+    // Check for calls with only literal arguments
+    else if (n.type === 'CallExpression' && !n.arguments.some(a => a.type !== 'Literal')) {
+      // Check if callee is builtin identifier
+      if (n.callee.type === 'Identifier' && !n.callee.declNode &&
 				!SKIP_BUILTIN_FUNCTIONS.includes(n.callee.name)) {
-				matches.push(n);
-				continue;
-			}
-			
-			// Check if callee is builtin member expression
-			if (n.callee.type === 'MemberExpression' && !n.callee.object.declNode &&
+        matches.push(n);
+        continue;
+      }
+
+      // Check if callee is builtin member expression
+      if (n.callee.type === 'MemberExpression' && !n.callee.object.declNode &&
 				!SKIP_BUILTIN_FUNCTIONS.includes(n.callee.object?.name) &&
 				!SKIP_IDENTIFIERS.includes(n.callee.object?.name) &&
 				!SKIP_PROPERTIES.includes(n.callee.property?.name || n.callee.property?.value)) {
-				matches.push(n);
-			}
-		}
-	}
-	return matches;
+        matches.push(n);
+      }
+    }
+  }
+  return matches;
 }
 
 /**
@@ -71,24 +71,24 @@ export function resolveBuiltinCallsMatch(arb, candidateFilter = () => true) {
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveBuiltinCallsTransform(arb, n, sharedSb) {
-	try {
-		const safeImplementation = safeImplementations[n.callee.name];
-		if (safeImplementation) {
-			// Use safe implementation for known functions (btoa, atob, etc.)
-			const args = n.arguments.map(a => a.value);
-			const tempValue = safeImplementation(...args);
-			if (tempValue) {
-				arb.markNode(n, createNewNode(tempValue));
-			}
-		} else {
-			// Evaluate unknown builtin calls in sandbox
-			const replacementNode = evalInVm(n.src, sharedSb);
-			if (replacementNode !== evalInVm.BAD_VALUE) arb.markNode(n, replacementNode);
-		}
-	} catch (e) {
-		logger.debug(e.message);
-	}
-	return arb;
+  try {
+    const safeImplementation = safeImplementations[n.callee.name];
+    if (safeImplementation) {
+      // Use safe implementation for known functions (btoa, atob, etc.)
+      const args = n.arguments.map(a => a.value);
+      const tempValue = safeImplementation(...args);
+      if (tempValue) {
+        arb.markNode(n, createNewNode(tempValue));
+      }
+    } else {
+      // Evaluate unknown builtin calls in sandbox
+      const replacementNode = evalInVm(n.src, sharedSb);
+      if (replacementNode !== evalInVm.BAD_VALUE) arb.markNode(n, replacementNode);
+    }
+  } catch (e) {
+    logger.debug(e.message);
+  }
+  return arb;
 }
 
 /**
@@ -100,13 +100,13 @@ export function resolveBuiltinCallsTransform(arb, n, sharedSb) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveBuiltinCalls(arb, candidateFilter = () => true) {
-	const matches = resolveBuiltinCallsMatch(arb, candidateFilter);
-	let sharedSb;
-	
-	for (let i = 0; i < matches.length; i++) {
-		// Create sandbox only when needed to avoid overhead
-		sharedSb = sharedSb || new Sandbox();
-		arb = resolveBuiltinCallsTransform(arb, matches[i], sharedSb);
-	}
-	return arb;
+  const matches = resolveBuiltinCallsMatch(arb, candidateFilter);
+  let sharedSb;
+
+  for (let i = 0; i < matches.length; i++) {
+    // Create sandbox only when needed to avoid overhead
+    sharedSb = sharedSb || new Sandbox();
+    arb = resolveBuiltinCallsTransform(arb, matches[i], sharedSb);
+  }
+  return arb;
 }

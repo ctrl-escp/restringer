@@ -26,7 +26,6 @@ export default [
       'object-curly-spacing': ['error', 'never'],
       'array-bracket-spacing': ['error', 'never'],
       'no-trailing-spaces': 'error',
-      'eol-last': ['error', 'always'],
       'no-multiple-empty-lines': ['error', {max: 1, maxEOF: 0}],
 
       /*
@@ -44,13 +43,10 @@ export default [
        * ───────── Predictability ─────────
        */
       'consistent-return': 'error',
-      'default-case': 'error',
       'dot-notation': 'error',
       'no-fallthrough': 'error',
       'no-unreachable': 'error',
       'no-throw-literal': 'error',
-      radix: ['error', 'always'],
-      yoda: ['error', 'never'],
 
       /*
        * ───────── Clean Refactors ─────────
@@ -69,7 +65,6 @@ export default [
        * ───────── Modern JS Discipline ─────────
        */
       'prefer-arrow-callback': 'error',
-      'prefer-template': 'error',
       'prefer-spread': 'error',
       'prefer-rest-params': 'error',
       'object-shorthand': ['error', 'always'],

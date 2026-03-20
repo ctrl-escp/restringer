@@ -18,24 +18,24 @@
  * // computed[key].value --> returns 'computed' identifier (if it has declNode)
  */
 export function getMainDeclaredObjectOfMemberExpression(memberExpression) {
-	// Input validation: only reject null/undefined, allow any valid AST node
-	if (!memberExpression) {
-		return null;
-	}
+  // Input validation: only reject null/undefined, allow any valid AST node
+  if (!memberExpression) {
+    return null;
+  }
 
-	let mainObject = memberExpression;
-	let iterationCount = 0;
-	const MAX_ITERATIONS = 50; // Prevent infinite loops in malformed AST
+  let mainObject = memberExpression;
+  let iterationCount = 0;
+  const MAX_ITERATIONS = 50; // Prevent infinite loops in malformed AST
 
-	// Traverse up the member expression chain to find the root object with a declaration
-	while (mainObject && 
-		   !mainObject.declNode && 
-		   mainObject.type === 'MemberExpression' && 
+  // Traverse up the member expression chain to find the root object with a declaration
+  while (mainObject &&
+		   !mainObject.declNode &&
+		   mainObject.type === 'MemberExpression' &&
 		   iterationCount < MAX_ITERATIONS) {
-		mainObject = mainObject.object;
-		iterationCount++;
-	}
+    mainObject = mainObject.object;
+    iterationCount++;
+  }
 
-	// Return the final object in the chain (original behavior preserved)
-	return mainObject;
+  // Return the final object in the chain (original behavior preserved)
+  return mainObject;
 }

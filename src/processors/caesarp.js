@@ -31,24 +31,24 @@ const VARIABLE_CONTAINING_THE_INNER_LAYER_REGEX = /\(((\w{3}\()+(\w{3})\)*)\)/gm
  * @return {Arborist}
  */
 function extractInnerLayer(arb) {
-	// The outer layer is a lot of code moved around and concatenated, but it all comes together in the last
-	// couple of lines where an object's toString is being replaced with the inner layer code, and then
-	// run when the object is being added to a string, implicitly invoking the object's toString method.
-	// We can catch the variable holding the code before it's injected and output it instead.
-	let script = arb.script;
+  // The outer layer is a lot of code moved around and concatenated, but it all comes together in the last
+  // couple of lines where an object's toString is being replaced with the inner layer code, and then
+  // run when the object is being added to a string, implicitly invoking the object's toString method.
+  // We can catch the variable holding the code before it's injected and output it instead.
+  let script = arb.script;
 
-	const matches = LINE_WITH_FINAL_ASSIGNMENT_REGEX.exec(script);
-	if (matches?.length) {
-		const lineToReplace = script.substring(matches.index);
-		// Sometimes the first layer variable is wrapped in other functions which will decrypt it
-		// like OdP(qv4(dAN(RKt))) instead of just RKt, so we need output the entire chain.
-		const innerLayerVarMatches = VARIABLE_CONTAINING_THE_INNER_LAYER_REGEX.exec(lineToReplace);
-		const variableContainingTheInnerLayer = innerLayerVarMatches ? innerLayerVarMatches[0] : matches[2];
-		script = script.replace(lineToReplace, `console.log(${variableContainingTheInnerLayer}.toString());})();\n`);
-		// script = evalWithDom(script);
-		if (script) arb = new Arborist(script);
-	}
-	return arb;
+  const matches = LINE_WITH_FINAL_ASSIGNMENT_REGEX.exec(script);
+  if (matches?.length) {
+    const lineToReplace = script.substring(matches.index);
+    // Sometimes the first layer variable is wrapped in other functions which will decrypt it
+    // like OdP(qv4(dAN(RKt))) instead of just RKt, so we need output the entire chain.
+    const innerLayerVarMatches = VARIABLE_CONTAINING_THE_INNER_LAYER_REGEX.exec(lineToReplace);
+    const variableContainingTheInnerLayer = innerLayerVarMatches ? innerLayerVarMatches[0] : matches[2];
+    script = script.replace(lineToReplace, `console.log(${variableContainingTheInnerLayer}.toString());})();\n`);
+    // script = evalWithDom(script);
+    if (script) arb = new Arborist(script);
+  }
+  return arb;
 }
 
 export const preprocessors = [extractInnerLayer];

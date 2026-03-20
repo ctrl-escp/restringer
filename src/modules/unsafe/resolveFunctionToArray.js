@@ -16,28 +16,28 @@ const {createOrderedSrc, getDeclarationWithContext} = utils;
  * @return {ASTNode[]} Array of VariableDeclarator nodes ready for array resolution
  */
 export function resolveFunctionToArrayMatch(arb, candidateFilter = () => true) {
-	const matches = [];
-	const relevantNodes = arb.ast[0].typeMap.VariableDeclarator;
-	
-	for (let i = 0; i < relevantNodes.length; i++) {
-		const n = relevantNodes[i];
-		
-		// Must be a variable assigned a function call result
-		if (n.init?.type !== 'CallExpression') continue;
-		
-		// All references must be member expressions that are NOT used as function callees
-		// Empty references array is allowed
-		if (n.id.references?.some(r => {
-			return r.parentNode.type !== 'MemberExpression' || 
-			       (r.parentNode.parentNode?.type === 'CallExpression' && 
+  const matches = [];
+  const relevantNodes = arb.ast[0].typeMap.VariableDeclarator;
+
+  for (let i = 0; i < relevantNodes.length; i++) {
+    const n = relevantNodes[i];
+
+    // Must be a variable assigned a function call result
+    if (n.init?.type !== 'CallExpression') continue;
+
+    // All references must be member expressions that are NOT used as function callees
+    // Empty references array is allowed
+    if (n.id.references?.some(r => {
+      return r.parentNode.type !== 'MemberExpression' ||
+			       (r.parentNode.parentNode?.type === 'CallExpression' &&
 			        r.parentNode.parentNode.callee === r.parentNode);
-		})) continue;
-		
-		if (candidateFilter(n)) {
-			matches.push(n);
-		}
-	}
-	return matches;
+    })) continue;
+
+    if (candidateFilter(n)) {
+      matches.push(n);
+    }
+  }
+  return matches;
 }
 
 /**
@@ -49,32 +49,32 @@ export function resolveFunctionToArrayMatch(arb, candidateFilter = () => true) {
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveFunctionToArrayTransform(arb, matches) {
-	if (!matches.length) return arb;
-	
-	const sharedSb = new Sandbox();
-	
-	for (let i = 0; i < matches.length; i++) {
-		const n = matches[i];
-		
-		// Determine the target node that contains the function definition
-		const targetNode = n.init.callee?.declNode?.parentNode || n.init;
-		
-		// Build evaluation context - include function definition if it's separate
-		let src = '';
-		if (![n.init, n.init?.parentNode].includes(targetNode)) {
-			// Function is defined elsewhere, include its context
-			src += createOrderedSrc(getDeclarationWithContext(targetNode));
-		}
-		
-		// Add the function call to evaluate
-		src += `\n;${createOrderedSrc([n.init])}\n;`;
-		
-		const replacementNode = evalInVm(src, sharedSb);
-		if (replacementNode !== evalInVm.BAD_VALUE) {
-			arb.markNode(n.init, replacementNode);
-		}
-	}
-	return arb;
+  if (!matches.length) return arb;
+
+  const sharedSb = new Sandbox();
+
+  for (let i = 0; i < matches.length; i++) {
+    const n = matches[i];
+
+    // Determine the target node that contains the function definition
+    const targetNode = n.init.callee?.declNode?.parentNode || n.init;
+
+    // Build evaluation context - include function definition if it's separate
+    let src = '';
+    if (![n.init, n.init?.parentNode].includes(targetNode)) {
+      // Function is defined elsewhere, include its context
+      src += createOrderedSrc(getDeclarationWithContext(targetNode));
+    }
+
+    // Add the function call to evaluate
+    src += `\n;${createOrderedSrc([n.init])}\n;`;
+
+    const replacementNode = evalInVm(src, sharedSb);
+    if (replacementNode !== evalInVm.BAD_VALUE) {
+      arb.markNode(n.init, replacementNode);
+    }
+  }
+  return arb;
 }
 
 /**
@@ -86,6 +86,6 @@ export function resolveFunctionToArrayTransform(arb, matches) {
  * @return {Arborist} The updated Arborist instance
  */
 export default function resolveFunctionToArray(arb, candidateFilter = () => true) {
-	const matches = resolveFunctionToArrayMatch(arb, candidateFilter);
-	return resolveFunctionToArrayTransform(arb, matches);
+  const matches = resolveFunctionToArrayMatch(arb, candidateFilter);
+  return resolveFunctionToArrayTransform(arb, matches);
 }
