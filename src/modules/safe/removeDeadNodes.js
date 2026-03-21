@@ -15,7 +15,7 @@ const RELEVANT_PARENTS = [
  * @param {Function} [candidateFilter] a filter to apply on the candidates list
  * @return {ASTNode[]} Array of dead identifier nodes
  */
-function removeDeadNodesMatch(arb, candidateFilter = () => true) {
+export function removeDeadNodesMatch(arb, candidateFilter = () => true) {
   const relevantNodes = arb.ast[0].typeMap.Identifier;
   const matchingNodes = [];
 
@@ -45,7 +45,7 @@ function removeDeadNodesMatch(arb, candidateFilter = () => true) {
  * @param {Object} identifierNode - The dead identifier node
  * @return {Arborist}
  */
-function removeDeadNodesTransform(arb, identifierNode) {
+export function removeDeadNodesTransform(arb, identifierNode) {
   const parent = identifierNode.parentNode;
   // Remove expression statement wrapper if present, otherwise remove the declaration
   const nodeToRemove = parent?.parentNode?.type === 'ExpressionStatement'
@@ -82,12 +82,10 @@ function removeDeadNodesTransform(arb, identifierNode) {
  * @param {Function} [candidateFilter] a filter to apply on the candidates list
  * @return {Arborist}
  */
-function removeDeadNodes(arb, candidateFilter = () => true) {
+export default function removeDeadNodes(arb, candidateFilter = () => true) {
   const matchingNodes = removeDeadNodesMatch(arb, candidateFilter);
   for (let i = 0; i < matchingNodes.length; i++) {
     arb = removeDeadNodesTransform(arb, matchingNodes[i]);
   }
   return arb;
 }
-
-export default removeDeadNodes;
