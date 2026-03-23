@@ -20,9 +20,10 @@
   },
   "dependencies": {
     "commander": "^14.0.2",
-    "flast": "2.2.8",
+    "flast": "^3.0.0",
     "isolated-vm": "6.1.2",
-    "obfuscation-detector": "^2.0.7"
+    "js-md5": "^0.8.3",
+    "obfuscation-detector": "^3.0.0"
   },
   "scripts": {
     "test": "node --test --trace-warnings --no-node-snapshot",
