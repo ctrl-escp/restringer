@@ -6,8 +6,10 @@ import {isNodeInRanges} from '../utils/isNodeInRanges.js';
 import {createOrderedSrc} from '../utils/createOrderedSrc.js';
 import {SKIP_IDENTIFIERS, SKIP_PROPERTIES} from '../config.js';
 import {getDeclarationWithContext} from '../utils/getDeclarationWithContext.js';
+import {getDescendants} from '../utils/getDescendants.js';
 
 const VALID_UNWRAP_TYPES = ['Literal', 'Identifier'];
+const SAFE_SELF_MUTATING_REPLACEMENT_TYPES = ['Literal', 'Identifier', 'UnaryExpression'];
 const CACHE_LIMIT = 100;
 
 // Module-level variables for appearance tracking
@@ -33,6 +35,60 @@ function countAppearances(n) {
   const count = (APPEARANCES.get(calleeName) || 0) + 1;
   APPEARANCES.set(calleeName, count);
   return count;
+}
+
+/**
+ * @param {ASTNode|undefined} declNode - Candidate declaration node for the callee binding
+ * @return {boolean} Whether the binding is reassigned or updated inside its own function body
+ */
+function doesFunctionMutateOwnBinding(declNode) {
+  const bindingName = declNode?.name;
+  const functionNode = declNode?.parentNode?.type?.includes('Function')
+    ? declNode.parentNode
+    : declNode?.parentNode?.init?.type?.includes('Function')
+      ? declNode.parentNode.init
+      : null;
+
+  if (!bindingName || !functionNode) return false;
+
+  const descendants = getDescendants(functionNode);
+  for (let i = 0; i < descendants.length; i++) {
+    const node = descendants[i];
+    if (node.type === 'AssignmentExpression' && node.left?.type === 'Identifier' && node.left.name === bindingName) {
+      return true;
+    }
+    if (node.type === 'UpdateExpression' && node.argument?.type === 'Identifier' && node.argument.name === bindingName) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * @param {Arborist} arb - The Arborist instance
+ * @param {ASTNode|undefined} callee - Callee node or member expression object
+ * @return {ASTNode|undefined} Declaration node to use for evaluation context
+ */
+function resolveCalleeDeclaration(arb, callee) {
+  const directDeclNode = callee?.declNode || callee?.object?.declNode;
+  if (!directDeclNode || directDeclNode.parentNode?.type !== 'CatchClause' || callee?.type !== 'Identifier') {
+    return directDeclNode;
+  }
+
+  const functionDeclarations = arb.ast[0].typeMap.FunctionDeclaration || [];
+  for (let i = 0; i < functionDeclarations.length; i++) {
+    const fn = functionDeclarations[i];
+    if (fn.id?.name === callee.name) return fn.id;
+  }
+
+  const variableDeclarators = arb.ast[0].typeMap.VariableDeclarator || [];
+  for (let i = 0; i < variableDeclarators.length; i++) {
+    const declarator = variableDeclarators[i];
+    if (declarator.id?.name === callee.name) return declarator.id;
+  }
+
+  return directDeclNode;
 }
 
 /**
@@ -91,7 +147,7 @@ export function resolveLocalCallsTransform(arb, matches) {
     }
 
     const callee = c.callee?.object || c.callee;
-    const declNode = callee?.declNode || callee?.object?.declNode;
+    const declNode = resolveCalleeDeclaration(arb, callee);
 
     // Skip simple wrappers that should be handled by safe modules
     if (declNode?.parentNode?.body?.body?.[0]?.type === 'ReturnStatement') {
@@ -123,7 +179,7 @@ export function resolveLocalCallsTransform(arb, matches) {
         const contextSb = new Sandbox();
         try {
           contextSb.run(createOrderedSrc(getDeclarationWithContext(declNode.parentNode)));
-          if (Object.keys(cache) >= CACHE_LIMIT) cache.flush();
+          if (Object.keys(cache).length >= CACHE_LIMIT) cache.flush();
           cache[cacheName] = contextSb;
         } catch {}
       }
@@ -135,10 +191,12 @@ export function resolveLocalCallsTransform(arb, matches) {
     const replacementNode = contextVM === evalInVm.BAD_VALUE ? evalInVm(nodeSrc) : evalInVm(nodeSrc, contextVM);
 
     if (replacementNode !== evalInVm.BAD_VALUE && replacementNode.type !== 'FunctionDeclaration' && replacementNode.name !== 'undefined') {
+      if (declNode?.parentKey === 'params' && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
+      if (doesFunctionMutateOwnBinding(declNode) && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
       // Anti-debugging protection: avoid resolving function toString that might trigger detection
       if (c.callee.type === 'MemberExpression' &&
 				(c.callee.property?.name || c.callee.property?.value) === 'toString' &&
-				replacementNode?.value?.substring(0, 8) === 'function') continue;
+					replacementNode?.value?.substring(0, 8) === 'function') continue;
 
       arb.markNode(c, replacementNode);
       modifiedRanges.push(c.range);

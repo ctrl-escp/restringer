@@ -739,6 +739,12 @@ describe('UNSAFE: resolveFunctionToArray', async () => {
     const result = applyModuleToCode(code, targetModule);
     assert.deepStrictEqual(result, expected);
   });
+  it('TN-7: Do not inline arrays from self-mutating functions', () => {
+    const code = 'function t() { var e = [1, 2]; return (t = function () { return e; })(); }\nconst arr = t();\nconst first = arr[0];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
 });
 describe('UNSAFE: resolveInjectedPrototypeMethodCalls', async () => {
   const targetModule = (await import('../src/modules/unsafe/resolveInjectedPrototypeMethodCalls.js')).default;
@@ -927,6 +933,12 @@ describe('UNSAFE: resolveLocalCalls', async () => {
   });
   it('TN-8: Member expression call on empty array', () => {
     const code = 'const arr = []; const fn = a => a.length; fn(arr);';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-9: Do not replace self-mutating function calls with complex values', () => {
+    const code = 'function t() { var e = [\'a\', \'b\']; return (t = function () { return e; })(); }\nt();';
     const expected = code;
     const result = applyModuleToCode(code, targetModule);
     assert.deepStrictEqual(result, expected);
