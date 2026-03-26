@@ -232,10 +232,9 @@ console.log(script);
 import {REstringer} from 'restringer';
 import {applyIteratively} from 'flast';
 
-const restringer = new REstringer(code);
-
-// Apply specific processors only
-restringer.detectObfuscationType = false;
+const restringer = new REstringer(code, {
+  detectObfuscationType: false,
+});
 
 // Manually apply processors
 const obfuscatorIoProcessor = await import('./processors/obfuscator.io.js');

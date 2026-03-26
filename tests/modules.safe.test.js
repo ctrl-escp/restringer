@@ -25,25 +25,25 @@ function applyModuleToCode(code, func, looped = false) {
 
 describe('SAFE: removeRedundantBlockStatements', async () => {
   const targetModule = (await import('../src/modules/safe/removeRedundantBlockStatements.js')).default;
-  it('TP-1', () => {
+  it('TP-1: Flatten a single nested block in an if statement', () => {
     const code = 'if (a) {{do_a();}}';
     const expected = 'if (a) {\n  do_a();\n}';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TP-2', () => {
+  it('TP-2: Flatten multiple sibling nested blocks', () => {
     const code = 'if (a) {{do_a();}{do_b();}}';
     const expected = 'if (a) {\n  do_a();\n  do_b();\n}';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TP-3', () => {
+  it('TP-3: Flatten nested blocks iteratively across multiple levels', () => {
     const code = 'if (a) {{do_a();}{do_b(); do_c();}{do_d();}}';
     const expected = 'if (a) {\n  do_a();\n  do_b();\n  do_c();\n  do_d();\n}';
     const result = applyModuleToCode(code, targetModule, true);
     assert.strictEqual(result, expected);
   });
-  it('TP-4', () => {
+  it('TP-4: Flatten deeply nested blocks while preserving sibling statements', () => {
     const code = 'if (a) {{{{{do_a();}}}} do_b();}';
     const expected = 'if (a) {\n  do_a();\n  do_b();\n}';
     const result = applyModuleToCode(code, targetModule, true);
@@ -314,7 +314,7 @@ case 1: console.log(1); a = 2; break;}}})();`;
 });
 describe('SAFE: removeDeadNodes', async () => {
   const targetModule = (await import('../src/modules/safe/removeDeadNodes.js')).default;
-  it('TP-1', () => {
+  it('TP-1: Remove an unused declarator while preserving the referenced one', () => {
     const code = 'var a = 3, b = 12; console.log(b);';
     const expected = 'var b = 12;\nconsole.log(b);';
     const result = applyModuleToCode(code, targetModule);
@@ -1139,7 +1139,7 @@ describe('SAFE: resolveFunctionConstructorCalls', async () => {
 });
 describe('SAFE: resolveMemberExpressionReferencesToArrayIndex', async () => {
   const targetModule = (await import('../src/modules/safe/resolveMemberExpressionReferencesToArrayIndex.js')).default;
-  it('TP-1', () => {
+  it('TP-1: Replace array index references with literal values', () => {
     const code = 'const a = [1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3];  b = a[0]; c = a[20];';
     const expected = `const a = [\n  1,\n  1,\n  1,\n  1,\n  1,\n  1,\n  1,\n  1,\n  1,\n  1,
   2,\n  2,\n  2,\n  2,\n  2,\n  2,\n  2,\n  2,\n  2,\n  2,\n  3\n];\nb = 1;\nc = 3;`;
@@ -1528,6 +1528,12 @@ describe('SAFE: resolveProxyVariables', async () => {
     const code = 'const proxy = obj.prop; console.log(proxy);';
     const expected = code;
     const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-6: Do not replace proxy target shadowed by catch parameter', () => {
+    const code = 'const t = e; try { fail(); } catch (e) { console.log(t, e); }';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule, true);
     assert.strictEqual(result, expected);
   });
 });
@@ -1956,7 +1962,7 @@ typeof 1;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TP-2 Unary operations', () => {
+  it('TP-2: Unary operations', () => {
     const code = `function unaryNegation(v) {return -v;}
 		function unaryPlus(v) {return +v;}
 		function logicalNot(v) {return !v;}
@@ -1970,7 +1976,7 @@ typeof 1;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TP-3 Update operations', () => {
+  it('TP-3: Update operations', () => {
     const code = `function incrementPre(v) {return ++v;}
 		function decrementPost(v) {return v--;}
 		(incrementPre(a), decrementPost(b));
@@ -2034,13 +2040,13 @@ describe('SAFE: separateChainedDeclarators', async () => {
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TP-3: A var and a let', () => {
+  it('TP-3: Split mixed var and let declarators inside an IIFE', () => {
     const code = '!function() {var a, b = 2; let c, d = 3;}();';
     const expected = '!(function () {\n  var a;\n  var b = 2;\n  let c;\n  let d = 3;\n}());';
     const result = applyModuleToCode(code, targetModule, true);
     assert.strictEqual(result, expected);
   });
-  it('TP-3: Wrap in a block statement for a one-liner', () => {
+  it('TP-4: Wrap single-line loop and if declarations in block statements', () => {
     const code = 'if (a) var b, c; while (true) var e = 3, d = 3;';
     const expected = 'if (a) {\n  var b;\n  var c;\n}\nwhile (true) {\n  var e = 3;\n  var d = 3;\n}';
     const result = applyModuleToCode(code, targetModule, true);

@@ -25,6 +25,22 @@ function isProxyVariablePattern(declaratorNode, candidateFilter) {
 }
 
 /**
+ * @param {ASTNode|undefined} ref - Reference node being rewritten
+ * @param {ASTNode} targetIdentifier - Identifier that will replace the proxy reference
+ * @return {boolean} Whether a catch parameter shadows the replacement identifier
+ */
+function isTargetShadowedInCatch(ref, targetIdentifier) {
+  let current = ref?.parentNode;
+  while (current) {
+    if (current.type === 'CatchClause' && current.param?.type === 'Identifier' && current.param.name === targetIdentifier.name) {
+      return true;
+    }
+    current = current.parentNode;
+  }
+  return false;
+}
+
+/**
  * Identifies VariableDeclarator nodes that represent proxy variables to other identifiers.
  *
  * A proxy variable is a declaration like `const alias = originalVar;` where the variable
@@ -91,6 +107,7 @@ export function resolveProxyVariablesTransform(arb, match) {
     // Replace all references with the target identifier
     for (let i = 0; i < references.length; i++) {
       const ref = references[i];
+      if (isTargetShadowedInCatch(ref, targetIdentifier)) continue;
       arb.markNode(ref, targetIdentifier);
     }
   }

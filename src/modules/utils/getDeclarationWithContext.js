@@ -146,6 +146,7 @@ export function getDeclarationWithContext(originNode, excludeOriginNode = false)
   /**
 	 * Adds a node to the traversal stack if it hasn't been visited and is worth traversing.
 	 * @param {ASTNode} node - Node to potentially add to stack
+	 * @return {void}
 	 */
   function addToStack(node) {
     if (!node ||

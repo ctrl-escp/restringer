@@ -30,11 +30,8 @@ function addNameToFE(n, name) {
       newNode.src = funcSrc;
       return newNode;
     }
-  } catch (e) {
-    // Return null if parsing fails rather than undefined
-    return null;
-  }
-  return null;
+  } catch {}
+  return null;  // Return null if parsing fails rather than undefined
 }
 
 /**
