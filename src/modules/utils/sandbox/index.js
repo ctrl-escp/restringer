@@ -278,7 +278,7 @@ export const SANDBOX_EXTENSION_POINTS = {
 };
 
 try {
-  await preloadSandboxProvider(DEFAULT_SANDBOX_CONFIG);
+  await preloadSandboxProvider(getDefaultSandboxConfigValue());
 } catch {}
 
 await preloadSandboxProvider({provider: 'process'});
