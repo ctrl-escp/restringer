@@ -1,3 +1,5 @@
+import globals from 'globals';
+
 export default [
   {
     ignores: [
@@ -13,6 +15,10 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      globals: {
+        ...globals.node,
+        Deno: 'readonly',
+      },
     },
 
     rules: {
@@ -60,6 +66,7 @@ export default [
         },
       ],
       'no-debugger': 'error',
+      'no-undef': 'error',
 
       /*
        * ───────── Modern JS Discipline ─────────
@@ -68,6 +75,14 @@ export default [
       'prefer-spread': 'error',
       'prefer-rest-params': 'error',
       'object-shorthand': ['error', 'always'],
+    },
+  },
+  {
+    files: ['src/modules/utils/sandbox/providers/sandboxEngineDeno.js'],
+    languageOptions: {
+      globals: {
+        ...globals.deno,
+      },
     },
   },
 ];
