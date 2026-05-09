@@ -126,8 +126,12 @@ export default function normalizeRedundantNotOperator(arb, candidateFilter = () 
 
   if (matches.length) {
     const sharedSandbox = new Sandbox();
-    for (let i = 0; i < matches.length; i++) {
-      arb = normalizeRedundantNotOperatorTransform(arb, matches[i], sharedSandbox);
+    try {
+      for (let i = 0; i < matches.length; i++) {
+        arb = normalizeRedundantNotOperatorTransform(arb, matches[i], sharedSandbox);
+      }
+    } finally {
+      sharedSandbox.close();
     }
   }
   return arb;

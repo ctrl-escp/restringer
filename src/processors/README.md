@@ -53,6 +53,8 @@ Processors are **lazily loaded** only when:
 2. Manual processor selection is specified
 3. Custom deobfuscation pipelines are created
 
+Processors run in the same pipeline as the core modules and therefore use the same configured sandbox as **`REstringer`** for any unsafe evaluation the pipeline triggers; see the root [README — Sandbox backends](../../README.md#sandbox-backends).
+
 ### Processor Architecture
 
 Processors export **preprocessors** and **postprocessors** arrays, not a default function:
@@ -232,10 +234,9 @@ console.log(script);
 import {REstringer} from 'restringer';
 import {applyIteratively} from 'flast';
 
-const restringer = new REstringer(code);
-
-// Apply specific processors only
-restringer.detectObfuscationType = false;
+const restringer = new REstringer(code, {
+  detectObfuscationType: false,
+});
 
 // Manually apply processors
 const obfuscatorIoProcessor = await import('./processors/obfuscator.io.js');

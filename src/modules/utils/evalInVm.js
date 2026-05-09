@@ -58,8 +58,9 @@ const MAX_CACHE_SIZE = 100;
  * // evalInVm('[1,2,3].length') => {type: 'Literal', value: 3, raw: '3'}
  */
 export function evalInVm(stringToEval, sb) {
-  const cacheName = `eval-${generateHash(stringToEval)}`;
-  if (CACHE[cacheName] === undefined) {
+  const sandboxKey = sb ? `${sb.providerName || 'sandbox'}-${sb.id || 'shared'}` : 'default';
+  const cacheName = `eval-${sandboxKey}-${generateHash(stringToEval)}`;
+  if (!Object.hasOwn(CACHE, cacheName)) {
     // Simple cache eviction: clear all when hitting size limit
     if (Object.keys(CACHE).length >= MAX_CACHE_SIZE) CACHE = {};
     CACHE[cacheName] = BAD_VALUE;
@@ -70,20 +71,21 @@ export function evalInVm(stringToEval, sb) {
         stringToEval = stringToEval.replace(ts.trap, ts.replaceWith);
       }
       const vm = sb || new Sandbox();
-      let res = vm.run(stringToEval);
+      try {
+        const res = typeof vm.runValue === 'function' ? vm.runValue(stringToEval) : vm.run(stringToEval)?.copySync?.();
 
-      // Only process valid, safe references that can be converted to AST nodes
-      if (vm.isReference(res) && !BAD_TYPES.includes(getObjType(res))) {
-        // noinspection JSUnresolvedVariable
-        res = res.copySync(); // Extract value from VM reference
-
-        // Check if result matches a known builtin object (e.g., console)
-        const objKeys = Object.keys(res).sort().join('');
-        if (MATCHING_OBJECT_KEYS[objKeys]) {
-          CACHE[cacheName] = MATCHING_OBJECT_KEYS[objKeys];
-        } else {
-          CACHE[cacheName] = createNewNode(res);
+        // Only process safe values that can be converted to AST nodes
+        if (!BAD_TYPES.includes(getObjType(res))) {
+          // Check if result matches a known builtin object (e.g., console)
+          const objKeys = Object.keys(res).sort().join('');
+          if (Object.hasOwn(MATCHING_OBJECT_KEYS, objKeys)) {
+            CACHE[cacheName] = MATCHING_OBJECT_KEYS[objKeys];
+          } else {
+            CACHE[cacheName] = createNewNode(res);
+          }
         }
+      } finally {
+        if (!sb) vm.close?.();
       }
     } catch {
       // Evaluation failed - cache entry remains BAD_VALUE

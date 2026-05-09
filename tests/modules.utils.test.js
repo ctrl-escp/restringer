@@ -1,5 +1,6 @@
 
 import assert from 'node:assert';
+import {spawnSync} from 'node:child_process';
 import {generateFlatAST} from 'flast';
 import {describe, it, beforeEach} from 'node:test';
 import {BAD_VALUE} from '../src/modules/config.js';
@@ -80,13 +81,13 @@ describe('UTILS: evalInVm', async () => {
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('TP-14: Debugger statement (neutralized and evaluates successfully)', () => {
+  it('TP-13: Debugger statement (neutralized and evaluates successfully)', () => {
     const code = 'debugger; 42';
     const expected = {type: 'Literal', value: 42, raw: '42'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('TP-13: Split debugger string neutralization works', () => {
+  it('TP-14: Split debugger string neutralization works', () => {
     const code = '\'debu\' + \'gger\'; 123';
     const expected = {type: 'Literal', value: 123, raw: '123'};
     const result = targetModule(code);
@@ -103,6 +104,19 @@ describe('UTILS: evalInVm', async () => {
     const expected = BAD_VALUE;
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
+  });
+  it('TN-2.1: Process-sandbox function objects do not collide with Object.prototype keys', async () => {
+    const {Sandbox, preloadSandboxProvider} = await import('../src/modules/utils/sandbox.js');
+    await preloadSandboxProvider({provider: 'process'});
+    const sandbox = new Sandbox({
+      provider: 'process',
+      options: {
+        runtime: 'node',
+      },
+    });
+    const result = targetModule('var f = {atob: function(h) { return h; }}; f[\'atob\'];', sandbox);
+    assert.strictEqual(result, BAD_VALUE);
+    sandbox.close();
   });
   it('TN-3: Promise objects (bad type)', () => {
     const code = 'Promise.resolve(42)';
@@ -260,49 +274,49 @@ describe('UTILS: areReferencesModified', async () => {
 });
 describe('UTILS: createNewNode', async () => {
   const targetModule = (await import('../src/modules/utils/createNewNode.js')).createNewNode;
-  it('Literan: String', () => {
+  it('TP-1: Literal: String', () => {
     const code = 'Baryo';
     const expected = {type: 'Literal', value: 'Baryo', raw: 'Baryo'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literan: String that starts with !', () => {
+  it('TP-2: Literal: String that starts with !', () => {
     const code = '!Baryo';
     const expected = {type: 'Literal', value: '!Baryo', raw: '!Baryo'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - positive number', () => {
+  it('TP-3: Literal: Number - positive number', () => {
     const code = 3;
     const expected = {type: 'Literal', value: 3, raw: '3'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - negative number', () => {
+  it('TP-4: Literal: Number - negative number', () => {
     const code = -3;
     const expected =  {type: 'UnaryExpression', operator: '-', argument: {type: 'Literal', value: '3', raw: '3'}};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - negative infinity', () => {
+  it('TP-5: Literal: Number - negative infinity', () => {
     const code = -Infinity;
     const expected =  {type: 'UnaryExpression', operator: '-', argument: {type: 'Identifier', name: 'Infinity'}};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - negative zero', () => {
+  it('TP-6: Literal: Number - negative zero', () => {
     const code = -0;
     const expected =  {type: 'UnaryExpression', operator: '-', argument: {type: 'Literal', value: 0, raw: '0'}};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - NOT operator', () => {
+  it('TP-7: Literal: Number - NOT operator', () => {
     const code = '!3';
     const expected =  {type: 'UnaryExpression', operator: '!', argument: {type: 'Literal', value: '3', raw: '3'}};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Literal: Number - Identifier', () => {
+  it('TP-8: Literal: Number - Identifier', () => {
     const code1 = Infinity;
     const expected1 =  {type: 'Identifier', name: 'Infinity'};
     const result1 = targetModule(code1);
@@ -312,19 +326,19 @@ describe('UTILS: createNewNode', async () => {
     const result2 = targetModule(code2);
     assert.deepStrictEqual(result2, expected2);
   });
-  it('Literal: Boolean', () => {
+  it('TP-9: Literal: Boolean', () => {
     const code = true;
     const expected = {type: 'Literal', value: true, 'raw': 'true'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Array: empty', () => {
+  it('TP-10: Array: empty', () => {
     const code = [];
     const expected = {type: 'ArrayExpression', elements: []};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Array: populated', () => {
+  it('TP-11: Array: populated', () => {
     const code = [1, 'a'];
     const expected = {type: 'ArrayExpression', elements: [
       {type: 'Literal', value: 1, raw: '1'},
@@ -333,13 +347,13 @@ describe('UTILS: createNewNode', async () => {
     const result = targetModule(code);
     assert.deepEqual(result, expected);
   });
-  it('Object: empty', () => {
+  it('TP-12: Object: empty', () => {
     const code = {};
     const expected = {type: 'ObjectExpression', properties: []};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Object: populated', () => {
+  it('TP-13: Object: populated', () => {
     const code = {a: 1};
     const expected = {type: 'ObjectExpression', properties: [{
       type: 'Property',
@@ -349,39 +363,47 @@ describe('UTILS: createNewNode', async () => {
     const result = targetModule(code);
     assert.deepEqual(result, expected);
   });
-  it('Object: populated with BAD_VALUE', () => {
+  it('TN-1: Object: populated with BAD_VALUE', () => {
     const code = {a() {}};
     const expected = BAD_VALUE;
     const result = targetModule(code);
     assert.deepEqual(result, expected);
   });
-  it('Undefined', () => {
+  it('TP-14: Identifier: undefined value', () => {
     const code = undefined;
     const expected = {type: 'Identifier', name: 'undefined'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Null', () => {
+  it('TP-15: Literal: null value', () => {
     const code = null;
     const expected = {type: 'Literal', raw: 'null'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it.todo('TODO: Implement Function', () => {
+  it('TP-16: FunctionDeclaration: parse named function source', () => {
+    const code = function add(a, b) {
+      return a + b;
+    };
+    const result = targetModule(code);
+    assert.strictEqual(result.type, 'FunctionDeclaration');
+    assert.strictEqual(result.id.name, 'add');
+    assert.strictEqual(result.params.length, 2);
+    assert.strictEqual(result.body.body[0].type, 'ReturnStatement');
   });
-  it('RegExp', () => {
+  it('TP-17: Literal: RegExp value', () => {
     const code = /regexp/gi;
     const expected = {type: 'Literal', regex: {flags: 'gi', pattern: 'regexp'}};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('BigInt', () => {
+  it('TP-18: Literal: BigInt value', () => {
     const code = 123n;
     const expected = {type: 'Literal', value: 123n, raw: '123n', bigint: '123'};
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Symbol with description', () => {
+  it('TP-19: CallExpression: Symbol with description', () => {
     const code = Symbol('test');
     const expected = {
       type: 'CallExpression',
@@ -391,7 +413,7 @@ describe('UTILS: createNewNode', async () => {
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
-  it('Symbol without description', () => {
+  it('TP-20: CallExpression: Symbol without description', () => {
     const code = Symbol();
     const expected = {
       type: 'CallExpression',
@@ -1028,7 +1050,7 @@ describe('UTILS: getDeclarationWithContext', async () => {
 });
 describe('UTILS: getDescendants', async () => {
   const targetModule = (await import('../src/modules/utils/getDescendants.js')).getDescendants;
-  it('TP-1', () => {
+  it('TP-1: Return all descendants in traversal order', () => {
     const code = 'a + b;';
     const ast = generateFlatAST(code);
     const targetNode = ast.find(n => n.type === 'BinaryExpression');
@@ -1321,7 +1343,12 @@ describe('UTILS: isNodeInRanges', async () => {
   });
 });
 describe('UTILS: Sandbox', async () => {
-  const {Sandbox} = await import('../src/modules/utils/sandbox.js');
+  const {Sandbox, preloadSandboxProvider, listSandboxProviders, getDefaultSandboxConfig} = await import('../src/modules/utils/sandbox.js');
+  const hasDeno = spawnSync('deno', ['--version'], {encoding: 'utf-8'}).status === 0;
+  it('TP-0: Default sandbox config inherits the host runtime executable', () => {
+    const sandbox = new Sandbox();
+    assert.deepStrictEqual(sandbox.config, getDefaultSandboxConfig());
+  });
   it('TP-1: Basic code execution', () => {
     const sandbox = new Sandbox();
     const result = sandbox.run('2 + 3');
@@ -1393,5 +1420,58 @@ describe('UTILS: Sandbox', async () => {
     assert.ok(!sandbox.isReference({}));
     assert.ok(!sandbox.isReference([]));
     assert.ok(!sandbox.isReference('string'));
+  });
+  it('TP-11: Process provider supports basic execution', async () => {
+    await preloadSandboxProvider({provider: 'process'});
+    const sandbox = new Sandbox({
+      provider: 'process',
+      options: {
+        runtime: 'node',
+      },
+    });
+    const result = sandbox.run('2 + 3');
+    assert.ok(sandbox.isReference(result));
+    assert.strictEqual(result.copySync(), 5);
+  });
+  it('TP-12: Process provider reuses context across executions', async () => {
+    await preloadSandboxProvider({provider: 'process'});
+    const sandbox = new Sandbox({
+      provider: 'process',
+      options: {
+        runtime: 'node',
+      },
+    });
+    const result1 = sandbox.run('var x = 10; x');
+    const result2 = sandbox.run('x * 2');
+    assert.strictEqual(result1.copySync(), 10);
+    assert.strictEqual(result2.copySync(), 20);
+  });
+  it('TP-12.1: Deno process provider supports strict execution', {skip: !hasDeno}, async () => {
+    await preloadSandboxProvider({provider: 'process'});
+    const sandbox = new Sandbox({
+      provider: 'process',
+      options: {
+        runtime: 'deno',
+        strict: true,
+      },
+    });
+    const result = sandbox.run('2 + 3');
+    assert.ok(sandbox.isReference(result));
+    assert.strictEqual(result.copySync(), 5);
+  });
+  it('TP-13: Registered providers include process', () => {
+    assert.ok(listSandboxProviders().includes('process'));
+  });
+  it('TN-4: Strict process isolation rejects unsupported runtime', async () => {
+    await preloadSandboxProvider({provider: 'process'});
+    assert.throws(() => {
+      new Sandbox({
+        provider: 'process',
+        options: {
+          runtime: 'node',
+          strict: true,
+        },
+      });
+    }, /cannot enforce strict isolation/);
   });
 });

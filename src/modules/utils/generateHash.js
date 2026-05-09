@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import md5 from 'js-md5';
 
 /**
  * Generates a fast MD5 hash of the input string for cache key generation and deduplication.
@@ -30,9 +30,9 @@ export function generateHash(input) {
     }
 
     // Generate MD5 hash for fast cache key generation
-    return crypto.createHash('md5').update(stringToHash).digest('hex');
+    return md5(stringToHash);
 
-  } catch (error) {
+  } catch {
     // Fallback hash generation if crypto operations fail
     // Simple string-based hash as last resort
     const str = String(input?.src ?? input ?? 'error');

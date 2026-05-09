@@ -104,28 +104,31 @@ export function resolveDefiniteBinaryExpressionsTransform(arb, matches) {
   if (!matches.length) return arb;
 
   const sharedSb = new Sandbox();
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      const n = matches[i];
+      const replacementNode = evalInVm(n.src, sharedSb);
 
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
-    const replacementNode = evalInVm(n.src, sharedSb);
-
-    if (replacementNode !== evalInVm.BAD_VALUE) {
-      try {
-        // Handle negative number edge case: when evaluating expressions like '5 - 10',
-        // the result may be a UnaryExpression with '-5' instead of a Literal with value -5.
-        // This ensures numeric operations remain as proper numeric literals.
-        if (replacementNode.type === 'UnaryExpression' &&
+      if (replacementNode !== evalInVm.BAD_VALUE) {
+        try {
+          // Handle negative number edge case: when evaluating expressions like '5 - 10',
+          // the result may be a UnaryExpression with '-5' instead of a Literal with value -5.
+          // This ensures numeric operations remain as proper numeric literals.
+          if (replacementNode.type === 'UnaryExpression' &&
 					typeof n?.left?.value === 'number' &&
 					typeof n?.right?.value === 'number') {
-          const v = parseInt(replacementNode.argument.raw);
-          replacementNode.argument.value = v;
-          replacementNode.argument.raw = `${v}`;
+            const v = parseInt(replacementNode.argument.raw);
+            replacementNode.argument.value = v;
+            replacementNode.argument.raw = `${v}`;
+          }
+          arb.markNode(n, replacementNode);
+        } catch (e) {
+          logger.debug(e.message);
         }
-        arb.markNode(n, replacementNode);
-      } catch (e) {
-        logger.debug(e.message);
       }
     }
+  } finally {
+    sharedSb.close();
   }
   return arb;
 }

@@ -103,10 +103,14 @@ export default function resolveBuiltinCalls(arb, candidateFilter = () => true) {
   const matches = resolveBuiltinCallsMatch(arb, candidateFilter);
   let sharedSb;
 
-  for (let i = 0; i < matches.length; i++) {
-    // Create sandbox only when needed to avoid overhead
-    sharedSb = sharedSb || new Sandbox();
-    arb = resolveBuiltinCallsTransform(arb, matches[i], sharedSb);
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      // Create sandbox only when needed to avoid overhead
+      sharedSb = sharedSb || new Sandbox();
+      arb = resolveBuiltinCallsTransform(arb, matches[i], sharedSb);
+    }
+  } finally {
+    sharedSb?.close();
   }
   return arb;
 }

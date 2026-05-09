@@ -58,14 +58,17 @@ export function resolveDefiniteMemberExpressionsTransform(arb, matches) {
   if (!matches.length) return arb;
 
   const sharedSb = new Sandbox();
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      const n = matches[i];
+      const replacementNode = evalInVm(n.src, sharedSb);
 
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
-    const replacementNode = evalInVm(n.src, sharedSb);
-
-    if (replacementNode !== evalInVm.BAD_VALUE) {
-      arb.markNode(n, replacementNode);
+      if (replacementNode !== evalInVm.BAD_VALUE) {
+        arb.markNode(n, replacementNode);
+      }
     }
+  } finally {
+    sharedSb.close();
   }
   return arb;
 }

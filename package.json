@@ -1,6 +1,6 @@
 {
   "name": "restringer",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Deobfuscate Javascript with emphasis on reconstructing strings",
   "main": "index.js",
   "type": "module",
@@ -19,16 +19,26 @@
     "test": "tests"
   },
   "dependencies": {
-    "commander": "^14.0.2",
-    "flast": "2.2.8",
-    "isolated-vm": "6.1.2",
-    "obfuscation-detector": "^2.0.7"
+    "commander": "^14.0.3",
+    "flast": "^3.0.0",
+    "js-md5": "^0.8.3",
+    "obfuscation-detector": "^3.0.0"
+  },
+  "peerDependencies": {
+    "isolated-vm": "6.1.2"
+  },
+  "peerDependenciesMeta": {
+    "isolated-vm": {
+      "optional": true
+    }
   },
   "scripts": {
     "test": "node --test --trace-warnings --no-node-snapshot",
     "test:coverage": "node --test --trace-warnings --no-node-snapshot --experimental-test-coverage",
     "test:quick": "node --test --trace-warnings --no-node-snapshot tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
-    "test:quick:watch": "node --test --trace-warnings --no-node-snapshot --watch tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js"
+    "test:quick:watch": "node --test --trace-warnings --no-node-snapshot --watch tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
+    "test:lint": "npx eslint .",
+    "test:lint:fix": "npx eslint . --fix"
   },
   "repository": {
     "type": "git",
@@ -53,6 +63,7 @@
     "@babel/plugin-syntax-import-assertions": "^7.27.6",
     "eslint": "^9.39.4",
     "globals": "^17.4.0",
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "isolated-vm": "^6.1.2"
   }
 }

@@ -6,6 +6,35 @@ import utils from '../utils/index.js';
 import {Sandbox} from '../utils/sandbox.js';
 import {evalInVm} from '../utils/evalInVm.js';
 const {createOrderedSrc, getDeclarationWithContext} = utils;
+import {getDescendants} from '../utils/getDescendants.js';
+
+/**
+ * @param {ASTNode|undefined} declNode - Candidate declaration node for the callee binding
+ * @return {boolean} Whether the binding is reassigned or updated inside its own function body
+ */
+function doesFunctionMutateOwnBinding(declNode) {
+  const bindingName = declNode?.name;
+  const functionNode = declNode?.parentNode?.type?.includes('Function')
+    ? declNode.parentNode
+    : declNode?.parentNode?.init?.type?.includes('Function')
+      ? declNode.parentNode.init
+      : null;
+
+  if (!bindingName || !functionNode) return false;
+
+  const descendants = getDescendants(functionNode);
+  for (let i = 0; i < descendants.length; i++) {
+    const node = descendants[i];
+    if (node.type === 'AssignmentExpression' && node.left?.type === 'Identifier' && node.left.name === bindingName) {
+      return true;
+    }
+    if (node.type === 'UpdateExpression' && node.argument?.type === 'Identifier' && node.argument.name === bindingName) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Identifies VariableDeclarator nodes with function calls that generate arrays.
@@ -24,6 +53,7 @@ export function resolveFunctionToArrayMatch(arb, candidateFilter = () => true) {
 
     // Must be a variable assigned a function call result
     if (n.init?.type !== 'CallExpression') continue;
+    if (doesFunctionMutateOwnBinding(n.init.callee?.declNode)) continue;
 
     // All references must be member expressions that are NOT used as function callees
     // Empty references array is allowed
@@ -52,27 +82,30 @@ export function resolveFunctionToArrayTransform(arb, matches) {
   if (!matches.length) return arb;
 
   const sharedSb = new Sandbox();
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      const n = matches[i];
 
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
+      // Determine the target node that contains the function definition
+      const targetNode = n.init.callee?.declNode?.parentNode || n.init;
 
-    // Determine the target node that contains the function definition
-    const targetNode = n.init.callee?.declNode?.parentNode || n.init;
+      // Build evaluation context - include function definition if it's separate
+      let src = '';
+      if (![n.init, n.init?.parentNode].includes(targetNode)) {
+        // Function is defined elsewhere, include its context
+        src += createOrderedSrc(getDeclarationWithContext(targetNode));
+      }
 
-    // Build evaluation context - include function definition if it's separate
-    let src = '';
-    if (![n.init, n.init?.parentNode].includes(targetNode)) {
-      // Function is defined elsewhere, include its context
-      src += createOrderedSrc(getDeclarationWithContext(targetNode));
+      // Add the function call to evaluate
+      src += `\n;${createOrderedSrc([n.init])}\n;`;
+
+      const replacementNode = evalInVm(src, sharedSb);
+      if (replacementNode !== evalInVm.BAD_VALUE) {
+        arb.markNode(n.init, replacementNode);
+      }
     }
-
-    // Add the function call to evaluate
-    src += `\n;${createOrderedSrc([n.init])}\n;`;
-
-    const replacementNode = evalInVm(src, sharedSb);
-    if (replacementNode !== evalInVm.BAD_VALUE) {
-      arb.markNode(n.init, replacementNode);
-    }
+  } finally {
+    sharedSb.close();
   }
   return arb;
 }

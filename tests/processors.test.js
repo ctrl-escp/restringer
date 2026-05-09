@@ -137,7 +137,7 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, originalScript);
   });
-  it('TN-9: Function passed to IIFE (function not self-modifying)', () => {
+  it('TN-6: Function passed to IIFE (function not self-modifying)', () => {
     const code = `function getArray() {
   return ['a', 'b', 'c'];
 }
@@ -186,7 +186,7 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
   });
-  it('TN-10: Arrow function without parentheses around parameters', () => {
+  it('TN-7: Arrow function without parentheses around parameters', () => {
     const code = `const arr = [1, 2, 3];
 (arr => {
   arr.push(arr.shift());
@@ -196,7 +196,7 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, originalScript);
   });
-  it('TN-11: Negative shift count', () => {
+  it('TN-8: Negative shift count', () => {
     const code = `const arr = [1, 2, 3];
 (function(array, shifts) {
   for (let i = 0; i < shifts; i++) {
@@ -208,7 +208,7 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, originalScript);
   });
-  it('TN-12: IIFE with complex array manipulation that cannot be resolved', () => {
+  it('TN-9: IIFE with complex array manipulation that cannot be resolved', () => {
     const code = `const arr = [1, 2, 3];
 (function(array, shifts) {
   Math.random() > 0.5 ? array.push(array.shift()) : array.unshift(array.pop());
@@ -221,8 +221,8 @@ shuffle(arr, 2);`;
 });
 describe('Processors tests: Caesar Plus', async () => {
   const targetProcessors = (await import('../src/processors/caesarp.js'));
-  // TODO: Fix test
-  it.skip('TP-1: FIX ME', () => {
+  // TODO: Align this expectation with the processor's current extraction behavior.
+  it.skip('TP-1: Extract Caesar+ inner layer from DOM-based wrapper', () => {
     const code = `(function() {
 	const a = document.createElement('div');
 	const b = 'Y29uc29sZS5sb2co';
@@ -294,7 +294,7 @@ describe('Processors tests: Function to Array', async () => {
 });
 describe('Processors tests: Obfuscator.io', async () => {
   const targetProcessors = (await import('../src/processors/obfuscator.io.js'));
-  it('TP-1', () => {
+  it('TP-1: Replace object method anti-tamper body with bypass string', () => {
     const code = `var a = {
   'removeCookie': function () {
     return 'dev';
@@ -305,7 +305,7 @@ describe('Processors tests: Obfuscator.io', async () => {
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
   });
-  it('TP-2', () => {
+  it('TP-2: Replace assigned instance method anti-tamper body with bypass string', () => {
     const code = `var a = function (f) {
   this['JoJo'] = function () {
     return 'newState';
