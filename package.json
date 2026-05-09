@@ -21,9 +21,16 @@
   "dependencies": {
     "commander": "^14.0.2",
     "flast": "^3.0.0",
-    "isolated-vm": "6.1.2",
     "js-md5": "^0.8.3",
     "obfuscation-detector": "^3.0.0"
+  },
+  "peerDependencies": {
+    "isolated-vm": "6.1.2"
+  },
+  "peerDependenciesMeta": {
+    "isolated-vm": {
+      "optional": true
+    }
   },
   "scripts": {
     "test": "node --test --trace-warnings --no-node-snapshot",
@@ -54,6 +61,7 @@
     "@babel/plugin-syntax-import-assertions": "^7.27.6",
     "eslint": "^9.39.4",
     "globals": "^17.4.0",
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "isolated-vm": "^6.1.2"
   }
 }

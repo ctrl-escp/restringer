@@ -61,24 +61,28 @@ export function resolveInjectedPrototypeMethodCallsTransform(arb, matches) {
       // Build execution context including the prototype assignment
       const context = getDeclarationWithContext(match.assignmentNode);
       const contextSb = new Sandbox();
-      contextSb.run(createOrderedSrc(context));
+      try {
+        contextSb.exec(createOrderedSrc(context));
 
-      // Find and resolve calls to this injected method
-      const callNodes = arb.ast[0].typeMap.CallExpression;
-      for (let j = 0; j < callNodes.length; j++) {
-        const callNode = callNodes[j];
+        // Find and resolve calls to this injected method
+        const callNodes = arb.ast[0].typeMap.CallExpression;
+        for (let j = 0; j < callNodes.length; j++) {
+          const callNode = callNodes[j];
 
-        // Check if this call uses the injected prototype method
-        if (callNode.callee?.type === 'MemberExpression' &&
+          // Check if this call uses the injected prototype method
+          if (callNode.callee?.type === 'MemberExpression' &&
 					(callNode.callee.property?.name === match.methodName ||
 					 callNode.callee.property?.value === match.methodName)) {
 
-          // Evaluate the method call in the prepared context
-          const replacementNode = evalInVm(`\n${createOrderedSrc([callNode])}`, contextSb);
-          if (replacementNode !== evalInVm.BAD_VALUE) {
-            arb.markNode(callNode, replacementNode);
+            // Evaluate the method call in the prepared context
+            const replacementNode = evalInVm(`\n${createOrderedSrc([callNode])}`, contextSb);
+            if (replacementNode !== evalInVm.BAD_VALUE) {
+              arb.markNode(callNode, replacementNode);
+            }
           }
         }
+      } finally {
+        contextSb.close();
       }
     } catch (e) {
       logger.debug(`[-] Error resolving injected prototype method '${match.methodName}': ${e.message}`);

@@ -33,16 +33,19 @@ export function resolveDeterministicConditionalExpressionsTransform(arb, matches
   if (!matches.length) return arb;
 
   const sharedSb = new Sandbox();
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      const n = matches[i];
+      // Evaluate the literal test value to determine truthiness
+      const replacementNode = evalInVm(`Boolean(${n.test.src});`, sharedSb);
 
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
-    // Evaluate the literal test value to determine truthiness
-    const replacementNode = evalInVm(`Boolean(${n.test.src});`, sharedSb);
-
-    if (replacementNode.type === 'Literal') {
-      // Replace conditional with consequent if truthy, alternate if falsy
-      arb.markNode(n, replacementNode.value ? n.consequent : n.alternate);
+      if (replacementNode.type === 'Literal') {
+        // Replace conditional with consequent if truthy, alternate if falsy
+        arb.markNode(n, replacementNode.value ? n.consequent : n.alternate);
+      }
     }
+  } finally {
+    sharedSb.close();
   }
   return arb;
 }

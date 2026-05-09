@@ -36,7 +36,7 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 
 🔧 **Modular Architecture**: 40+ deobfuscation modules organized into safe and unsafe categories
 
-🛡️ **Safe Execution**: Unsafe modules use a sandbox [isolated-vm](https://www.npmjs.com/package/isolated-vm) for secure code evaluation
+🛡️ **Pluggable Sandbox Execution**: Unsafe modules can run through provider-backed sandboxes such as `isolated-vm` or a local process runtime
 
 🎯 **Targeted Processing**: Specialized processors for common obfuscators (obfuscator.io, Caesar Plus, etc.)
 
@@ -51,6 +51,9 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 ### Requirements
 - **Node.js v22+**
 
+For the hardened `node` sandbox backend, the selected Node executable must be **v22.20.0 or newer**.
+By default, the process sandbox now inherits the same runtime and executable that launched REstringer.
+
 ### Global Installation (CLI)
 ```bash
 npm install -g restringer
@@ -59,6 +62,13 @@ npm install -g restringer
 ### Local Installation (Module)
 ```bash
 npm install restringer
+```
+
+### Optional `isolated-vm` Backend
+`isolated-vm` is no longer installed by default. Install it only if you plan to run:
+
+```bash
+npm install isolated-vm
 ```
 
 ### Development Installation
@@ -76,6 +86,7 @@ npm install
 
 ```
 Usage: restringer input_filename [-h] [-c] [-q | -v] [-m M] [-o [output_filename]]
+                  [--sandbox <name>] [--sb-exec <path>] [--sb-timeout <ms>] [--sb-memory-limit <mb>]
 
 positional arguments:
   input_filename                  The obfuscated JavaScript file
@@ -87,6 +98,10 @@ optional arguments:
   -v, --verbose                   Show debug messages during deobfuscation
   -m, --max-iterations M          Maximum deobfuscation iterations (must be > 0)
   -o, --output [filename]         Write output to file (default: <input>-deob.js)
+  --sandbox <name>                Sandbox to use: isolated-vm, node, deno, or bun (default: current runtime)
+  --sb-exec <path>                Path to the sandbox runtime executable
+  --sb-timeout <ms>               Sandbox execution timeout in milliseconds (default: 1000)
+  --sb-memory-limit <mb>          isolated-vm memory limit in MB (default: 128)
 ```
 
 #### Examples
@@ -95,6 +110,13 @@ optional arguments:
 ```bash
 restringer obfuscated.js
 ```
+
+This uses the same runtime that launched `restringer` by default.
+
+Examples:
+- `node bin/deobfuscate.js ...` -> sandbox defaults to that Node executable
+- `deno run -A bin/deobfuscate.js ...` -> sandbox defaults to that Deno executable
+- `bun run bin/deobfuscate.js ...` -> sandbox defaults to that Bun executable
 
 **Save to specific file**:
 ```bash
@@ -116,6 +138,31 @@ restringer obfuscated.js -q -o output.js
 restringer obfuscated.js -c -o output.js
 ```
 
+**Use the Node.js sandbox**:
+```bash
+restringer obfuscated.js --sandbox=node
+```
+
+**Use the Deno sandbox**:
+```bash
+restringer obfuscated.js --sandbox=deno
+```
+
+**Use a specific Node.js binary for the sandbox**:
+```bash
+restringer obfuscated.js --sandbox=node --sb-exec=/opt/node-v22/bin/node
+```
+
+**Raise the sandbox timeout**:
+```bash
+restringer obfuscated.js --sandbox=deno --sb-timeout=400
+```
+
+**Set an isolated-vm memory limit**:
+```bash
+restringer obfuscated.js --sandbox=isolated-vm --sb-memory-limit=64
+```
+
 ### Module Usage
 
 #### Basic Example
@@ -128,7 +175,12 @@ const _0x3f1b = _0x4c2a[0] + ' ' + _0x4c2a[1];
 console.log(_0x3f1b);
 `;
 
-const restringer = new REstringer(obfuscatedCode);
+const restringer = new REstringer(obfuscatedCode, {
+  clean: false,
+  detectObfuscationType: true,
+  maxIterations: 500,
+  normalize: true,
+});
 
 if (restringer.deobfuscate()) {
   console.log('✅ Deobfuscation successful!');
@@ -137,6 +189,41 @@ if (restringer.deobfuscate()) {
 } else {
   console.log('❌ No changes made');
 }
+```
+
+#### Using the Node Sandbox
+```javascript
+import {REstringer, preloadSandboxProvider} from 'restringer';
+
+await preloadSandboxProvider({provider: 'process'});
+
+const restringer = new REstringer(obfuscatedCode, {
+  sandbox: {
+    provider: 'process',
+    options: {
+      runtime: 'node',
+    },
+  },
+});
+
+restringer.deobfuscate();
+```
+
+#### Using `isolated-vm`
+Install `isolated-vm` first, then preload and select it explicitly:
+
+```javascript
+import {REstringer, preloadSandboxProvider} from 'restringer';
+
+await preloadSandboxProvider({provider: 'isolated-vm'});
+
+const restringer = new REstringer(obfuscatedCode, {
+  sandbox: {
+    provider: 'isolated-vm',
+  },
+});
+
+restringer.deobfuscate();
 ```
 
 ---
@@ -211,7 +298,9 @@ import fs from 'node:fs';
 import {REstringer} from 'restringer';
 
 const code = fs.readFileSync('obfuscated.js', 'utf-8');
-const restringer = new REstringer(code);
+const restringer = new REstringer(code, {
+  detectObfuscationType: false,
+});
 
 // Find and replace a specific method
 const targetMethod = restringer.unsafeMethods.find(m => 
@@ -247,9 +336,10 @@ restringer.deobfuscate();
 - Examples: String normalization, syntax simplification, dead code removal
 
 **Unsafe Modules** (`src/modules/unsafe/`):
-- Use `eval()` in an isolated sandbox for dynamic analysis
+- Use provider-backed sandbox execution for dynamic analysis
 - Can resolve complex expressions and function calls
-- Secured using [isolated-vm](https://www.npmjs.com/package/isolated-vm)
+- Support `isolated-vm` and local process runtimes today
+- Reserve Docker and iframe providers as extension points for later adapters
 
 ### Processing Pipeline
 

@@ -82,27 +82,30 @@ export function resolveFunctionToArrayTransform(arb, matches) {
   if (!matches.length) return arb;
 
   const sharedSb = new Sandbox();
+  try {
+    for (let i = 0; i < matches.length; i++) {
+      const n = matches[i];
 
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
+      // Determine the target node that contains the function definition
+      const targetNode = n.init.callee?.declNode?.parentNode || n.init;
 
-    // Determine the target node that contains the function definition
-    const targetNode = n.init.callee?.declNode?.parentNode || n.init;
+      // Build evaluation context - include function definition if it's separate
+      let src = '';
+      if (![n.init, n.init?.parentNode].includes(targetNode)) {
+        // Function is defined elsewhere, include its context
+        src += createOrderedSrc(getDeclarationWithContext(targetNode));
+      }
 
-    // Build evaluation context - include function definition if it's separate
-    let src = '';
-    if (![n.init, n.init?.parentNode].includes(targetNode)) {
-      // Function is defined elsewhere, include its context
-      src += createOrderedSrc(getDeclarationWithContext(targetNode));
+      // Add the function call to evaluate
+      src += `\n;${createOrderedSrc([n.init])}\n;`;
+
+      const replacementNode = evalInVm(src, sharedSb);
+      if (replacementNode !== evalInVm.BAD_VALUE) {
+        arb.markNode(n.init, replacementNode);
+      }
     }
-
-    // Add the function call to evaluate
-    src += `\n;${createOrderedSrc([n.init])}\n;`;
-
-    const replacementNode = evalInVm(src, sharedSb);
-    if (replacementNode !== evalInVm.BAD_VALUE) {
-      arb.markNode(n.init, replacementNode);
-    }
+  } finally {
+    sharedSb.close();
   }
   return arb;
 }

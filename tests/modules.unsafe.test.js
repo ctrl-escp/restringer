@@ -2,6 +2,9 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 import {Arborist, applyIteratively, generateFlatAST} from 'flast';
+import {useIsolatedVmForUnsafeTests} from './helpers/useIsolatedVm.js';
+
+useIsolatedVmForUnsafeTests();
 
 /**
  * Apply a module to a given code snippet.
@@ -101,7 +104,7 @@ describe('UNSAFE: normalizeRedundantNotOperator', async () => {
 describe('UNSAFE: resolveAugmentedFunctionWrappedArrayReplacements', async () => {
   const targetModule = (await import('../src/modules/unsafe/resolveAugmentedFunctionWrappedArrayReplacements.js')).default;
 
-  it.todo('Add Missing True Positive Test Cases');
+  it.todo('TP-1: Replace augmented decryptor calls with resolved array values');
 
   it('TN-1: Do not transform functions without augmentation', () => {
     const code = `function simpleFunc() { return 'test'; }
@@ -341,67 +344,67 @@ describe('UNSAFE: resolveDefiniteBinaryExpressions', async () => {
   // Test the inlined helper function
   const {doesBinaryExpressionContainOnlyLiterals} = await import('../src/modules/unsafe/resolveDefiniteBinaryExpressions.js');
 
-  it('Helper TP-1: Literal node', () => {
+  it('TP-7: Helper accepts a literal node', () => {
     const ast = generateFlatAST('\'a\'');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'Literal'));
     assert.ok(result);
   });
-  it('Helper TP-2: Binary expression with literals', () => {
+  it('TP-8: Helper accepts a binary expression with literals', () => {
     const ast = generateFlatAST('1 + 2');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'BinaryExpression'));
     assert.ok(result);
   });
-  it('Helper TP-3: Unary expression with literal', () => {
+  it('TP-9: Helper accepts a unary expression with a literal', () => {
     const ast = generateFlatAST('-\'a\'');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'UnaryExpression'));
     assert.ok(result);
   });
-  it('Helper TP-4: Complex nested binary expressions', () => {
+  it('TP-10: Helper accepts complex nested binary expressions', () => {
     const ast = generateFlatAST('1 + 2 + 3 + 4');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'BinaryExpression'));
     assert.ok(result);
   });
-  it('Helper TP-5: Logical expression with literals', () => {
+  it('TP-11: Helper accepts a logical expression with literals', () => {
     const ast = generateFlatAST('true && false');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'LogicalExpression'));
     assert.ok(result);
   });
-  it('Helper TP-6: Conditional expression with literals', () => {
+  it('TP-12: Helper accepts a conditional expression with literals', () => {
     const ast = generateFlatAST('true ? 1 : 2');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'ConditionalExpression'));
     assert.ok(result);
   });
-  it('Helper TP-7: Sequence expression with literals', () => {
+  it('TP-13: Helper accepts a sequence expression with literals', () => {
     const ast = generateFlatAST('(1, 2, 3)');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'SequenceExpression'));
     assert.ok(result);
   });
-  it('Helper TN-7: Update expression with identifier', () => {
+  it('TN-7: Helper rejects an update expression with an identifier', () => {
     const ast = generateFlatAST('let x = 5; ++x;');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'UpdateExpression'));
     assert.strictEqual(result, false); // ++x contains an identifier, not a literal
   });
-  it('Helper TN-1: Identifier is rejected', () => {
+  it('TN-8: Helper rejects an identifier', () => {
     const ast = generateFlatAST('a');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'Identifier'));
     assert.strictEqual(result, false);
   });
-  it('Helper TN-2: Unary expression with identifier', () => {
+  it('TN-9: Helper rejects a unary expression with an identifier', () => {
     const ast = generateFlatAST('!a');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'UnaryExpression'));
     assert.strictEqual(result, false);
   });
-  it('Helper TN-3: Binary expression with identifier', () => {
+  it('TN-10: Helper rejects a binary expression with an identifier', () => {
     const ast = generateFlatAST('1 + b');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'BinaryExpression'));
     assert.strictEqual(result, false);
   });
-  it('Helper TN-4: Complex non-literal expressions are rejected', () => {
+  it('TN-11: Helper rejects complex non-literal expressions', () => {
     const ast = generateFlatAST('true && x');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'LogicalExpression'));
     assert.strictEqual(result, false);
   });
-  it('Helper TN-5: Function calls and member expressions', () => {
+  it('TN-12: Helper rejects function calls and member expressions', () => {
     const ast = generateFlatAST('func()');
     const result = doesBinaryExpressionContainOnlyLiterals(ast.find(n => n.type === 'CallExpression'));
     assert.strictEqual(result, false);
@@ -410,7 +413,7 @@ describe('UNSAFE: resolveDefiniteBinaryExpressions', async () => {
     const result2 = doesBinaryExpressionContainOnlyLiterals(ast2.find(n => n.type === 'MemberExpression'));
     assert.strictEqual(result2, false);
   });
-  it('Helper TN-6: Null and undefined handling', () => {
+  it('TN-13: Helper rejects null and undefined inputs', () => {
     assert.strictEqual(doesBinaryExpressionContainOnlyLiterals(null), false);
     assert.strictEqual(doesBinaryExpressionContainOnlyLiterals(undefined), false);
     assert.strictEqual(doesBinaryExpressionContainOnlyLiterals({}), false);

@@ -4,6 +4,9 @@ import {describe, it} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import {REstringer} from '../src/restringer.js';
+import {useIsolatedVmForUnsafeTests} from './helpers/useIsolatedVm.js';
+
+useIsolatedVmForUnsafeTests();
 
 function getDeobfuscatedCode(code) {
   const restringer = new REstringer(code);
@@ -15,7 +18,7 @@ function getDeobfuscatedCode(code) {
 describe('Samples tests', () => {
   const resourcePath = './resources';
   const cwd = fileURLToPath(import.meta.url).split('/').slice(0, -1).join('/');
-  it('Deobfuscate sample: JSFuck', () => {
+  it('TP-1: Deobfuscate sample: JSFuck', () => {
     const sampleFilename = join(cwd, resourcePath, 'jsfuck.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -23,7 +26,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: Ant & Cockroach', () => {
+  it('TP-2: Deobfuscate sample: Ant & Cockroach', () => {
     const sampleFilename = join(cwd, resourcePath, 'ant.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -31,7 +34,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: New Function IIFE', () => {
+  it('TP-3: Deobfuscate sample: New Function IIFE', () => {
     const sampleFilename = join(cwd, resourcePath, 'newFunc.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -39,7 +42,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: Hunter', () => {
+  it('TP-4: Deobfuscate sample: Hunter', () => {
     const sampleFilename = join(cwd, resourcePath, 'hunter.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -47,7 +50,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: _$_', () => {
+  it('TP-5: Deobfuscate sample: _$_', () => {
     const sampleFilename = join(cwd, resourcePath, 'udu.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -55,7 +58,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: Prototype Calls', () => {
+  it('TP-6: Deobfuscate sample: Prototype Calls', () => {
     const sampleFilename = join(cwd, resourcePath, 'prototypeCalls.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -63,7 +66,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it.skip('TODO: FIX Deobfuscate sample: Caesar+', () => {
+  it.skip('TP-7: Deobfuscate sample: Caesar+', () => {
     const sampleFilename = join(cwd, resourcePath, 'caesar.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -71,7 +74,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: eval(Ox$', () => {
+  it('TP-8: Deobfuscate sample: eval(Ox$', () => {
     const sampleFilename = join(cwd, resourcePath, 'evalOxd.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -79,7 +82,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: Obfuscator.io', () => {
+  it('TP-9: Deobfuscate sample: Obfuscator.io', () => {
     const sampleFilename = join(cwd, resourcePath, 'obfuscator.io.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -87,7 +90,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: $s', () => {
+  it('TP-10: Deobfuscate sample: $s', () => {
     const sampleFilename = join(cwd, resourcePath, 'ds.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');
@@ -95,7 +98,7 @@ describe('Samples tests', () => {
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
-  it('Deobfuscate sample: Local Proxies', () => {
+  it('TP-11: Deobfuscate sample: Local Proxies', () => {
     const sampleFilename = join(cwd, resourcePath, 'localProxies.js');
     const expectedSolutionFilename = sampleFilename + '-deob.js';
     const code = readFileSync(sampleFilename, 'utf-8');

@@ -1,7 +1,7 @@
 export default [
   {
     ignores: [
-      'tests/resources/',
+      'tests/resources/**',
       '**/jquery*.js',
       '**/*tmp*.*',
       '**/*tmp*/',

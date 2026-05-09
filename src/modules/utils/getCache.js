@@ -1,6 +1,13 @@
 let CACHE = {};
 let RELEVANT_SCRIPT_HASH = null;
 
+function closeCacheEntries(cache) {
+  const values = Object.values(cache);
+  for (let i = 0; i < values.length; i++) {
+    values[i]?.close?.();
+  }
+}
+
 /**
  * Gets a per-script cache object that automatically invalidates when the script hash changes.
  * This ensures that cached results from one script don't contaminate processing of another script.
@@ -24,6 +31,7 @@ export function getCache(currentScriptHash) {
 
   // Cache invalidation: clear when script changes
   if (scriptHash !== RELEVANT_SCRIPT_HASH) {
+    closeCacheEntries(CACHE);
     RELEVANT_SCRIPT_HASH = scriptHash;
     CACHE = {};
   }
@@ -36,6 +44,7 @@ export function getCache(currentScriptHash) {
  * Useful for clearing memory between processing phases or for testing.
  */
 getCache.flush = function() {
+  closeCacheEntries(CACHE);
   CACHE = {};
   // Note: RELEVANT_SCRIPT_HASH is intentionally preserved to avoid
   // unnecessary cache misses on the next getCache call with same hash

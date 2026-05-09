@@ -1,8 +1,9 @@
 import {fileURLToPath} from 'node:url';
 import {logger as flastLogger, applyIteratively} from 'flast';
 import {processors} from './processors/index.js';
-import {detectObfuscation} from 'obfuscation-detector';
+import {detectObfuscationReduced} from 'obfuscation-detector';
 import {config, safe as safeMod, unsafe as unsafeMod, utils} from './modules/index.js';
+import {assertSandboxProviderAvailable, normalizeSandboxConfig, withSandboxConfig} from './modules/utils/sandbox/index.js';
 const {normalizeScript} = utils.default;
 import {readFileSync} from 'node:fs';
 const __version__ = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8')).version;
@@ -24,18 +25,25 @@ export class REstringer {
 
   /**
 	 * @param {string} script The target script to be deobfuscated
-	 * @param {boolean} [normalize] Run optional methods which will make the script more readable
+	 * @param {Object} [options] Configuration options
+	 * @param {boolean} [options.clean=false] Remove dead nodes after deobfuscation
+	 * @param {boolean} [options.detectObfuscationType=true] Whether to auto-detect obfuscation type
+	 * @param {number} [options.maxIterations=500] Maximum safe-pass iterations per loop
+	 * @param {boolean} [options.normalize=true] Normalize output script formatting after deobfuscation
+	 * @param {Object} [options.sandbox] Sandbox provider configuration
 	 */
-  constructor(script, normalize = true) {
+  constructor(script, options = {}) {
     this.script = script;
-    this.normalize = normalize;
+    this.normalize = options.normalize ?? true;
+    this.clean = options.clean ?? false;
     this.modified = false;
     this.obfuscationName = 'Generic';
     this._preprocessors = [];
     this._postprocessors = [];
     this.logger.setLogLevelLog();
-    this.maxIterations = config.DEFAULT_MAX_ITERATIONS;
-    this.detectObfuscationType = true;
+    this.maxIterations = options.maxIterations ?? config.DEFAULT_MAX_ITERATIONS.value;
+    this.detectObfuscationType = options.detectObfuscationType ?? true;
+    this.sandbox = normalizeSandboxConfig(options.sandbox);
     // Deobfuscation methods that don't use eval
     this.safeMethods = [
       safe.rearrangeSequences,
@@ -84,9 +92,10 @@ export class REstringer {
 
   /**
 	 * Determine the type of the obfuscation, and populate the appropriate pre- and post- processors.
+	 * @return {string} Detected obfuscation type name
 	 */
   determineObfuscationType() {
-    const detectedObfuscationType = detectObfuscation(this.script, false).slice(-1)[0];
+    const detectedObfuscationType = detectObfuscationReduced(this.script).slice(-1)[0];
     if (detectedObfuscationType) {
       this.obfuscationName = detectedObfuscationType;
       if (processors[detectedObfuscationType]) {
@@ -105,8 +114,9 @@ export class REstringer {
 	 * 2. Apply all unsafe methods exactly once (they may be overreaching, so limited to 1 iteration)
 	 * 3. Repeat the entire process until no changes occur in either phase
 	 *
-	 * This approach maximizes safe deobfuscation before using potentially risky eval-based methods,
-	 * while allowing unsafe methods to expose new opportunities for safe methods in subsequent iterations.
+   * This approach maximizes safe deobfuscation before using potentially risky eval-based methods,
+   * while allowing unsafe methods to expose new opportunities for safe methods in subsequent iterations.
+	 * @return {void}
 	 */
   _loopSafeAndUnsafeDeobfuscationMethods() {
     // Track whether any iteration made changes (vs this.modified which tracks current iteration only)
@@ -129,23 +139,27 @@ export class REstringer {
 	 * Determine obfuscation type and run the pre- and post- processors accordingly.
 	 * Run the deobfuscation methods in a loop until nothing more is changed.
 	 * Normalize script to make it more readable.
-	 * @param {boolean} [clean] Remove dead nodes after deobfuscation. Defaults to false.
 	 * @return {boolean} true if the script was modified during deobfuscation; false otherwise.
 	 */
-  deobfuscate(clean = false) {
-    if (this.detectObfuscationType) this.determineObfuscationType();
-    this._runProcessors(this._preprocessors);
-    this._loopSafeAndUnsafeDeobfuscationMethods();
-    this._runProcessors(this._postprocessors);
-    if (this.modified && this.normalize) this.script = normalizeScript(this.script);
-    if (clean) this.script = applyIteratively(this.script, [safe.removeDeadNodes], this.maxIterations);
-    return this.modified;
+  deobfuscate() {
+    assertSandboxProviderAvailable(this.sandbox);
+
+    return withSandboxConfig(this.sandbox, () => {
+      if (this.detectObfuscationType) this.determineObfuscationType();
+      this._runProcessors(this._preprocessors);
+      this._loopSafeAndUnsafeDeobfuscationMethods();
+      this._runProcessors(this._postprocessors);
+      if (this.modified && this.normalize) this.script = normalizeScript(this.script);
+      if (this.clean) this.script = applyIteratively(this.script, [safe.removeDeadNodes], this.maxIterations);
+      return this.modified;
+    });
   }
 
   /**
 	 * Run specific deobfuscation which must run before or after the main deobfuscation loop
 	 * in order to successfully complete deobfuscation.
 	 * @param {Array<Function|string>} processorsArr An array of either imported deobfuscation methods or the name of internal methods.
+	 * @return {void}
 	 */
   _runProcessors(processorsArr) {
     for (let i = 0; i < processorsArr.length; i++) {

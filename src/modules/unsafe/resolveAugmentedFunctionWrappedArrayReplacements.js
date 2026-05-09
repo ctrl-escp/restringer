@@ -151,14 +151,18 @@ export function resolveAugmentedFunctionWrappedArrayReplacementsTransform(arb, n
           if (!replacementCandidates.length) continue;
 
           const sb = new Sandbox();
-          sb.run(context);
+          try {
+            sb.exec(context);
 
-          for (let j = 0; j < replacementCandidates.length; j++) {
-            const rc = replacementCandidates[j];
-            const replacementNode = evalInVm(`\n${rc.src}`, sb);
-            if (replacementNode !== evalInVm.BAD_VALUE) {
-              arb.markNode(rc, replacementNode);
+            for (let j = 0; j < replacementCandidates.length; j++) {
+              const rc = replacementCandidates[j];
+              const replacementNode = evalInVm(`\n${rc.src}`, sb);
+              if (replacementNode !== evalInVm.BAD_VALUE) {
+                arb.markNode(rc, replacementNode);
+              }
             }
+          } finally {
+            sb.close();
           }
           break;
         }

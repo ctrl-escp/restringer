@@ -25,6 +25,20 @@ function sortByApperanceFrequency(a, b) {
   return APPEARANCES.get(getCalleeName(b)) - APPEARANCES.get(getCalleeName(a));
 }
 
+function closeCachedSandboxes(cache) {
+  const values = Object.values(cache);
+  for (let i = 0; i < values.length; i++) {
+    values[i]?.close?.();
+  }
+}
+
+function clearLocalCache(cache) {
+  closeCachedSandboxes(cache);
+  for (const key in cache) {
+    delete cache[key];
+  }
+}
+
 /**
  * Counts and tracks the appearance frequency of a call expression's callee.
  * @param {ASTNode} n - Call expression node
@@ -135,72 +149,81 @@ export function resolveLocalCallsTransform(arb, matches) {
   const cache = getCache(arb.ast[0].scriptHash);
   const modifiedRanges = [];
 
-  candidateLoop: for (let i = 0; i < matches.length; i++) {
-    const c = matches[i];
+  try {
+    candidateLoop: for (let i = 0; i < matches.length; i++) {
+      const c = matches[i];
 
-    // Skip if already modified in this iteration
-    if (isNodeInRanges(c, modifiedRanges)) continue;
+      // Skip if already modified in this iteration
+      if (isNodeInRanges(c, modifiedRanges)) continue;
 
-    // Skip if any argument has problematic type
-    for (let j = 0; j < c.arguments.length; j++) {
-      if (c.arguments[j].type === 'ThisExpression') continue candidateLoop;
-    }
+      // Skip if any argument has problematic type
+      for (let j = 0; j < c.arguments.length; j++) {
+        if (c.arguments[j].type === 'ThisExpression') continue candidateLoop;
+      }
 
-    const callee = c.callee?.object || c.callee;
-    const declNode = resolveCalleeDeclaration(arb, callee);
+      const callee = c.callee?.object || c.callee;
+      const declNode = resolveCalleeDeclaration(arb, callee);
 
-    // Skip simple wrappers that should be handled by safe modules
-    if (declNode?.parentNode?.body?.body?.[0]?.type === 'ReturnStatement') {
-      const returnArg = declNode.parentNode.body.body[0].argument;
-      // Leave simple literal/identifier returns to safe unwrapping modules
-      if (VALID_UNWRAP_TYPES.includes(returnArg.type) || returnArg.type.includes('unction')) continue;
-      // Leave function shell unwrapping to dedicated module
-      else if (returnArg.type === 'CallExpression' &&
+      // Skip simple wrappers that should be handled by safe modules
+      if (declNode?.parentNode?.body?.body?.[0]?.type === 'ReturnStatement') {
+        const returnArg = declNode.parentNode.body.body[0].argument;
+        // Leave simple literal/identifier returns to safe unwrapping modules
+        if (VALID_UNWRAP_TYPES.includes(returnArg.type) || returnArg.type.includes('unction')) continue;
+        // Leave function shell unwrapping to dedicated module
+        else if (returnArg.type === 'CallExpression' &&
 				returnArg.callee?.object?.type === 'FunctionExpression' &&
 				(returnArg.callee.property?.name || returnArg.callee.property?.value) === 'apply') continue;
-    }
+      }
 
-    // Cache management for performance
-    const cacheName = `rlc-${callee.name || callee.value}-${declNode?.nodeId}`;
-    if (!cache[cacheName]) {
-      cache[cacheName] = evalInVm.BAD_VALUE;
+      // Cache management for performance
+      const cacheName = `rlc-${callee.name || callee.value}-${declNode?.nodeId}`;
+      if (!cache[cacheName]) {
+        cache[cacheName] = evalInVm.BAD_VALUE;
 
-      // Skip problematic callee types that shouldn't be evaluated
-      if (SKIP_IDENTIFIERS.includes(callee.name) ||
+        // Skip problematic callee types that shouldn't be evaluated
+        if (SKIP_IDENTIFIERS.includes(callee.name) ||
 				(callee.type === 'ArrayExpression' && !callee.elements.length) ||
 				(callee.arguments || []).some(arg => SKIP_IDENTIFIERS.includes(arg) || arg?.type === 'ThisExpression')) continue;
 
-      if (declNode) {
-        // Skip simple function wrappers (handled by safe modules)
-        if (declNode.parentNode.type === 'FunctionDeclaration' &&
+        if (declNode) {
+          // Skip simple function wrappers (handled by safe modules)
+          if (declNode.parentNode.type === 'FunctionDeclaration' &&
 					VALID_UNWRAP_TYPES.includes(declNode.parentNode?.body?.body?.[0]?.argument?.type)) continue;
 
-        // Build execution context in sandbox
-        const contextSb = new Sandbox();
-        try {
-          contextSb.run(createOrderedSrc(getDeclarationWithContext(declNode.parentNode)));
-          if (Object.keys(cache).length >= CACHE_LIMIT) cache.flush();
-          cache[cacheName] = contextSb;
-        } catch {}
+          // Build execution context in sandbox
+          const contextSb = new Sandbox();
+          try {
+            contextSb.exec(createOrderedSrc(getDeclarationWithContext(declNode.parentNode)));
+            if (Object.keys(cache).length >= CACHE_LIMIT) {
+              clearLocalCache(cache);
+            }
+            cache[cacheName] = contextSb;
+          } catch {
+            contextSb.close();
+          }
+        }
+      }
+
+      // Evaluate call expression in appropriate context
+      const contextVM = cache[cacheName];
+      const nodeSrc = createOrderedSrc([c]);
+      const replacementNode = contextVM === evalInVm.BAD_VALUE ? evalInVm(nodeSrc) : evalInVm(nodeSrc, contextVM);
+
+      if (replacementNode !== evalInVm.BAD_VALUE && replacementNode.type !== 'FunctionDeclaration' && replacementNode.name !== 'undefined') {
+        if (declNode?.parentKey === 'params' && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
+        if (doesFunctionMutateOwnBinding(declNode) && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
+
+        // Anti-debugging protection: avoid resolving function toString that might trigger detection
+        if (c.callee.type === 'MemberExpression' &&
+				(c.callee.property?.name || c.callee.property?.value) === 'toString' &&
+				replacementNode?.value?.substring(0, 8) === 'function') continue;
+
+        arb.markNode(c, replacementNode);
+        modifiedRanges.push(c.range);
       }
     }
-
-    // Evaluate call expression in appropriate context
-    const contextVM = cache[cacheName];
-    const nodeSrc = createOrderedSrc([c]);
-    const replacementNode = contextVM === evalInVm.BAD_VALUE ? evalInVm(nodeSrc) : evalInVm(nodeSrc, contextVM);
-
-    if (replacementNode !== evalInVm.BAD_VALUE && replacementNode.type !== 'FunctionDeclaration' && replacementNode.name !== 'undefined') {
-      if (declNode?.parentKey === 'params' && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
-      if (doesFunctionMutateOwnBinding(declNode) && !SAFE_SELF_MUTATING_REPLACEMENT_TYPES.includes(replacementNode.type)) continue;
-      // Anti-debugging protection: avoid resolving function toString that might trigger detection
-      if (c.callee.type === 'MemberExpression' &&
-				(c.callee.property?.name || c.callee.property?.value) === 'toString' &&
-					replacementNode?.value?.substring(0, 8) === 'function') continue;
-
-      arb.markNode(c, replacementNode);
-      modifiedRanges.push(c.range);
-    }
+  } finally {
+    clearLocalCache(cache);
   }
   return arb;
 }
