@@ -32,7 +32,7 @@ export function generateHash(input) {
     // Generate MD5 hash for fast cache key generation
     return md5(stringToHash);
 
-  } catch (error) {
+  } catch {
     // Fallback hash generation if crypto operations fail
     // Simple string-based hash as last resort
     const str = String(input?.src ?? input ?? 'error');

@@ -2,7 +2,6 @@ import assert from 'node:assert';
 import {describe, it} from 'node:test';
 import {parseArgs} from '../src/utils/parseArgs.js';
 import {createHostRuntimeSandboxConfig} from '../src/modules/utils/sandbox/runtime.js';
-const consolelog = console.log;
 
 function createExpectedOptions(inputFilename, overrides = {}) {
   return {
