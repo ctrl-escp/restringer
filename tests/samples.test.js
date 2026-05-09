@@ -1,15 +1,25 @@
 import assert from 'node:assert';
 import {readFileSync} from 'node:fs';
-import {describe, it} from 'node:test';
+import {before, describe, it} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import {REstringer} from '../src/restringer.js';
-import {useIsolatedVmForUnsafeTests} from './helpers/useIsolatedVm.js';
+import {preloadSandboxProvider} from '../src/modules/utils/sandbox/index.js';
+import {detectCurrentRuntime} from '../src/modules/utils/sandbox/runtime.js';
 
-useIsolatedVmForUnsafeTests();
+const shouldForceIsolatedVm = detectCurrentRuntime() === 'node';
+
+before(async () => {
+  if (shouldForceIsolatedVm) {
+    await preloadSandboxProvider({provider: 'isolated-vm'});
+  }
+});
 
 function getDeobfuscatedCode(code) {
-  const restringer = new REstringer(code);
+  const restringer = new REstringer(
+    code,
+    shouldForceIsolatedVm ? {sandbox: {provider: 'isolated-vm'}} : undefined,
+  );
   restringer.logger.setLogLevel(restringer.logger.logLevels.NONE);
   restringer.deobfuscate();
   return restringer.script;
