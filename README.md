@@ -38,6 +38,7 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 - Swappable sandbox backends: `isolated-vm` or subprocess evaluation under Node / Deno / Bun
 - Processors for specific stacks (obfuscator.io, Caesar Plus, etc.)
 - String recovery, dead-node cleanup, control-flow cleanup where patterns match
+- But the major feature is the modularity that allows one to create [bespoke deobfuscators](#custom-deobfuscators)
 
 ---
 
@@ -45,19 +46,23 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 
 ### Requirements
 
-You need Node.js **v22+** to run REstringer. Extra binaries (`deno`, `bun`) or [`isolated-vm`](https://www.npmjs.com/package/isolated-vm) only matter if you choose those backends; see [Sandbox backends](#sandbox-backends).
+You can run REstringer with only Node.js (v22+). The default sandbox will be Node itself running in a spawned process.
+You can manually install `[isolated-vm](https://www.npmjs.com/package/isolated-vm)` with `npm i isolated-ve` which will then be used as the default sandbox. Deno and Bun can also be used (see [Sandbox backends](#sandbox-backends)).
 
 ### Global Installation (CLI)
+
 ```bash
 npm install -g restringer
 ```
 
 ### Local Installation (Module)
+
 ```bash
 npm install restringer
 ```
 
 ### Optional `isolated-vm` Backend
+
 `isolated-vm` is no longer installed by default. Install it only if you plan to run:
 
 ```bash
@@ -65,6 +70,7 @@ npm install isolated-vm
 ```
 
 ### Development Installation
+
 ```bash
 git clone https://github.com/ctrl-escp/restringer.git
 cd restringer
@@ -154,6 +160,7 @@ Neither path looks like a full browser or unrestricted Node: snippets run after 
 ### Module Usage
 
 #### Basic Example
+
 ```javascript
 import {REstringer} from 'restringer';
 
@@ -315,11 +322,13 @@ restringer.deobfuscate();
 ### Module Categories
 
 **Safe Modules** (`src/modules/safe/`):
+
 - Perform transformations without code evaluation
 - No risk of executing malicious code
 - Examples: String normalization, syntax simplification, dead code removal
 
 **Unsafe Modules** (`src/modules/unsafe/`):
+
 - Use provider-backed sandbox execution for dynamic analysis (see [Sandbox backends](#sandbox-backends))
 - Can resolve complex expressions and function calls
 - Support `isolated-vm` and local process runtimes today
@@ -348,6 +357,7 @@ Processors are separate match/transform steps tuned for particular tools; see [s
 - `docs/` - contributor docs
 
 ### Running Tests
+
 ```bash
 # Quick test suite (without testing against samples)
 npm run test:quick
@@ -370,26 +380,32 @@ See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup, style notes, and PR 
 ## Resources
 
 ### Documentation
+
 - [Processors Guide](src/processors/README.md)
 - [Contributing Guide](docs/CONTRIBUTING.md)
 
-### Related Projects  
+### Related Projects
+
 - [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector)
 - [flAST](https://github.com/ctrl-escp/flast)
 
 ### Research & Blog Posts
 
 **The REstringer Tri(b)logy**:
+
 - [The Far Point of a Static Encounter](https://www.humansecurity.com/tech-engineering-blog/the-far-point-of-a-static-encounter/) - Part 1: Understanding static analysis challenges
 - [Automating Skimmer Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/automating-skimmer-deobfuscation/) - Part 2: Automated deobfuscation techniques  
 - [Defeating JavaScript Obfuscation](https://www.humansecurity.com/tech-engineering-blog/defeating-javascript-obfuscation/) - Part 3: The story of REstringer
 
 **Additional Resources**:
+
 - [Caesar Plus Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/deobfuscating-caesar/)
 
 ### Community
+
 - [GitHub Issues](https://github.com/ctrl-escp/restringer/issues)
 - [Twitter @ctrl__esc](https://twitter.com/ctrl__esc)
+
 ---
 
 ## License
