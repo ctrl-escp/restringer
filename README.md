@@ -8,7 +8,7 @@
 
 REstringer automatically detects obfuscation patterns and applies targeted deobfuscation techniques to restore readable JavaScript code. It handles various obfuscation methods while respecting scope limitations and maintaining code functionality.
 
-📧 **Contact**: For questions and suggestions, open an issue or find me on [LinkedIn - Ben Baryo](https://www.linkedin.com/in/bbaryo/)
+**Contact:** For questions and suggestions, open an issue or find me on [LinkedIn - Ben Baryo](https://www.linkedin.com/in/bbaryo/)
 
 ---
 
@@ -18,6 +18,7 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 - [Installation](#installation)
 - [Usage](#usage)
   - [Command-Line Usage](#command-line-usage)
+  - [Sandbox backends](#sandbox-backends)
   - [Module Usage](#module-usage)
 - [Advanced Usage](#advanced-usage)
   - [Custom Deobfuscators](#custom-deobfuscators)
@@ -32,27 +33,19 @@ REstringer automatically detects obfuscation patterns and applies targeted deobf
 
 ## Features
 
-✨ **Automatic Obfuscation Detection**: Uses [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) to identify specific obfuscation types
-
-🔧 **Modular Architecture**: 40+ deobfuscation modules organized into safe and unsafe categories
-
-🛡️ **Pluggable Sandbox Execution**: Unsafe modules can run through provider-backed sandboxes such as `isolated-vm` or a local process runtime
-
-🎯 **Targeted Processing**: Specialized processors for common obfuscators (obfuscator.io, Caesar Plus, etc.)
-
-⚡ **Performance Optimized**: Match/transform patterns and performance improvements throughout
-
-🔍 **Comprehensive Coverage**: Handles string reconstruction, dead code removal, control flow simplification, and more
+- Obfuscation detection via [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector)
+- 40+ modules split into safe (no execution) and unsafe (sandboxed eval) passes
+- Swappable sandbox backends: `isolated-vm` or subprocess evaluation under Node / Deno / Bun
+- Processors for specific stacks (obfuscator.io, Caesar Plus, etc.)
+- String recovery, dead-node cleanup, control-flow cleanup where patterns match
 
 ---
 
 ## Installation
 
 ### Requirements
-- **Node.js v22+**
 
-For the hardened `node` sandbox backend, the selected Node executable must be **v22.20.0 or newer**.
-By default, the process sandbox now inherits the same runtime and executable that launched REstringer.
+You need Node.js **v22+** to run REstringer. Extra binaries (`deno`, `bun`) or [`isolated-vm`](https://www.npmjs.com/package/isolated-vm) only matter if you choose those backends; see [Sandbox backends](#sandbox-backends).
 
 ### Global Installation (CLI)
 ```bash
@@ -93,6 +86,7 @@ positional arguments:
 
 optional arguments:
   -h, --help                      Show this help message and exit
+  -V, --version                   Show version number and exit
   -c, --clean                     Remove dead nodes after deobfuscation (unsafe)
   -q, --quiet                     Suppress output to stdout
   -v, --verbose                   Show debug messages during deobfuscation
@@ -106,62 +100,56 @@ optional arguments:
 
 #### Examples
 
-**Basic deobfuscation** (print to stdout):
+Print to stdout (default sandbox follows whatever started the CLI: same Node/Deno/Bun binary when REstringer can detect it):
+
 ```bash
 restringer obfuscated.js
 ```
 
-This uses the same runtime that launched `restringer` by default.
+Write to a file, limit iterations, tweak verbosity:
 
-Examples:
-- `node bin/deobfuscate.js ...` -> sandbox defaults to that Node executable
-- `deno run -A bin/deobfuscate.js ...` -> sandbox defaults to that Deno executable
-- `bun run bin/deobfuscate.js ...` -> sandbox defaults to that Bun executable
-
-**Save to specific file**:
 ```bash
 restringer obfuscated.js -o clean-code.js
-```
-
-**Verbose output with iteration limit**:
-```bash
 restringer obfuscated.js -v -m 10 -o output.js
-```
-
-**Quiet mode** (no console output):
-```bash
 restringer obfuscated.js -q -o output.js
 ```
 
-**Remove dead code** (potentially unsafe):
+`--clean` strips dead nodes afterward (can change behavior; treat as unsafe):
+
 ```bash
 restringer obfuscated.js -c -o output.js
 ```
 
-**Use the Node.js sandbox**:
+Sandbox flags:
+
 ```bash
 restringer obfuscated.js --sandbox=node
-```
-
-**Use the Deno sandbox**:
-```bash
 restringer obfuscated.js --sandbox=deno
-```
-
-**Use a specific Node.js binary for the sandbox**:
-```bash
 restringer obfuscated.js --sandbox=node --sb-exec=/opt/node-v22/bin/node
-```
-
-**Raise the sandbox timeout**:
-```bash
 restringer obfuscated.js --sandbox=deno --sb-timeout=400
-```
-
-**Set an isolated-vm memory limit**:
-```bash
 restringer obfuscated.js --sandbox=isolated-vm --sb-memory-limit=64
 ```
+
+### Sandbox backends
+
+Unsafe passes evaluate snippets to fold literals and builtins. There is a `process` provider (spawn Node, Deno, or Bun) and `isolated-vm`, which uses a V8 isolate via the [npm package](https://www.npmjs.com/package/isolated-vm).
+
+If you skip `--sandbox`, REstringer aligns `process` with the host runtime (Node / Deno / Bun) and reuses the current executable path when it can. `--sandbox node` or `bun` uses that binary from `PATH` unless `--sb-exec` says otherwise. `--sandbox deno` picks Deno and sets `strict: true`; only Deno can honor that, so enabling strict evaluation on Node or Bun fails fast. The CLI never accepts `--sandbox process`; use `node`, `deno`, `bun`, or `isolated-vm`.
+
+For `process` with Node, the evaluated binary must be at least **22.20.0** (the subprocess uses hardened Node flags). Deno and Bun only need to be installed discoverably. `isolated-vm` remains optional: `npm install isolated-vm` when you need it.
+
+`--sb-timeout` maps to `sandbox.options.timeout` (default 1000 ms per eval), `--sb-exec` to `executablePath`, `--sb-memory-limit` to `memoryLimit` (128 MB default; isolate sizing only applies to `isolated-vm`). Strict Deno from code:
+
+```javascript
+await preloadSandboxProvider({
+  provider: 'process',
+  options: {runtime: 'deno', strict: true},
+});
+```
+
+Importing the package loads the sandbox glue and seeds the default `process` setup, so simple scripts usually need nothing else. If you switch to `isolated-vm` or another registered provider, call `await preloadSandboxProvider({...})` before `deobfuscate()`. `registerSandboxProvider` is there for custom implementations.
+
+Neither path looks like a full browser or unrestricted Node: snippets run after dropping `Math.random` and `Date`, and subprocess engines scrub globals such as `fetch`, `WebAssembly`, and `navigator` (`isolated-vm` has its own small blocklist too). Values coming back must serialize (no Promises, no cycles). Node workers start with `--permission` and related flags; strict Deno wraps the engine with `--deny-read`, `--deny-write`, `--deny-net`, `--deny-run`, `--deny-env`. That cuts down accidental damage during deobfuscation; it is not a guarantee against malicious code.
 
 ### Module Usage
 
@@ -183,15 +171,14 @@ const restringer = new REstringer(obfuscatedCode, {
 });
 
 if (restringer.deobfuscate()) {
-  console.log('✅ Deobfuscation successful!');
   console.log(restringer.script);
-  // Output: console.log('hello world');
 } else {
-  console.log('❌ No changes made');
+  console.log('No changes applied.');
 }
 ```
 
-#### Using the Node Sandbox
+Process-backed Node runtime:
+
 ```javascript
 import {REstringer, preloadSandboxProvider} from 'restringer';
 
@@ -209,8 +196,7 @@ const restringer = new REstringer(obfuscatedCode, {
 restringer.deobfuscate();
 ```
 
-#### Using `isolated-vm`
-Install `isolated-vm` first, then preload and select it explicitly:
+With `isolated-vm` installed:
 
 ```javascript
 import {REstringer, preloadSandboxProvider} from 'restringer';
@@ -231,8 +217,6 @@ restringer.deobfuscate();
 ## Advanced Usage
 
 ### Custom Deobfuscators
-
-Create targeted deobfuscators using REstringer's modular system:
 
 ```javascript
 import {applyIteratively} from 'flast';
@@ -336,43 +320,32 @@ restringer.deobfuscate();
 - Examples: String normalization, syntax simplification, dead code removal
 
 **Unsafe Modules** (`src/modules/unsafe/`):
-- Use provider-backed sandbox execution for dynamic analysis
+- Use provider-backed sandbox execution for dynamic analysis (see [Sandbox backends](#sandbox-backends))
 - Can resolve complex expressions and function calls
 - Support `isolated-vm` and local process runtimes today
 - Reserve Docker and iframe providers as extension points for later adapters
 
 ### Processing Pipeline
 
-1. **Detection**: Identify obfuscation type using pattern recognition
-2. **Preprocessing**: Apply obfuscation-specific preparations
-3. **Core Deobfuscation**: Run safe and unsafe modules iteratively  
-4. **Postprocessing**: Clean up and optimize the result
-5. **Validation**: Ensure output correctness
+Detect obfuscation flavor; run preprocessors; iterate safe then unsafe modules; postprocessors; optional normalization / `--clean`.
 
 ### Processor Architecture
 
-Specialized processors handle specific obfuscation patterns:
-- **Match/Transform Pattern**: Separate identification and modification logic
-- **Performance Optimized**: Pre-compiled patterns and efficient algorithms  
-- **Configurable**: Support for custom filtering and targeting
+Processors are separate match/transform steps tuned for particular tools; see [src/processors/README.md](src/processors/README.md).
 
 ---
 
 ## Development
 
 ### Project Structure
-```
-restringer/
-├── src/
-│   ├── modules/
-│   │   ├── safe/          # Safe deobfuscation modules
-│   │   ├── unsafe/        # Unsafe deobfuscation modules
-│   │   └── utils/         # Utility functions
-│   ├── processors/        # Obfuscation-specific processors
-│   └── restringer.js      # Main REstringer class
-├── tests/                 # Comprehensive test suites
-└── docs/                  # Documentation
-```
+
+- `src/modules/safe/` - safe transforms (no evaluation)
+- `src/modules/unsafe/` - eval-backed transforms
+- `src/modules/utils/` - shared helpers
+- `src/processors/` - obfuscation-specific processors
+- `src/restringer.js` - main class
+- `tests/` - test suites
+- `docs/` - contributor docs
 
 ### Running Tests
 ```bash
@@ -390,39 +363,33 @@ npm test
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for detailed guidelines on:
-
-- Setting up the development environment
-- Code standards and best practices  
-- Module and processor development
-- Testing requirements
-- Pull request process
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup, style notes, and PR expectations.
 
 ---
 
 ## Resources
 
 ### Documentation
-- 📖 [Processors Guide](src/processors/README.md) - Detailed processor documentation
-- 🤝 [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute to REstringer
+- [Processors Guide](src/processors/README.md)
+- [Contributing Guide](docs/CONTRIBUTING.md)
 
 ### Related Projects  
-- 🔍 [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector) - Automatic obfuscation detection
-- 🌳 [flAST](https://github.com/ctrl-escp/flast) - AST manipulation utilities
+- [Obfuscation Detector](https://github.com/ctrl-escp/obfuscation-detector)
+- [flAST](https://github.com/ctrl-escp/flast)
 
 ### Research & Blog Posts
 
 **The REstringer Tri(b)logy**:
-- 📝 [The Far Point of a Static Encounter](https://www.humansecurity.com/tech-engineering-blog/the-far-point-of-a-static-encounter/) - Part 1: Understanding static analysis challenges
-- 🔧 [Automating Skimmer Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/automating-skimmer-deobfuscation/) - Part 2: Automated deobfuscation techniques  
-- 🛡️ [Defeating JavaScript Obfuscation](https://www.humansecurity.com/tech-engineering-blog/defeating-javascript-obfuscation/) - Part 3: The story of REstringer
+- [The Far Point of a Static Encounter](https://www.humansecurity.com/tech-engineering-blog/the-far-point-of-a-static-encounter/) - Part 1: Understanding static analysis challenges
+- [Automating Skimmer Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/automating-skimmer-deobfuscation/) - Part 2: Automated deobfuscation techniques  
+- [Defeating JavaScript Obfuscation](https://www.humansecurity.com/tech-engineering-blog/defeating-javascript-obfuscation/) - Part 3: The story of REstringer
 
 **Additional Resources**:
-- 🔐 [Caesar Plus Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/deobfuscating-caesar/) - Deep dive into Caesar cipher obfuscation
+- [Caesar Plus Deobfuscation](https://www.humansecurity.com/tech-engineering-blog/deobfuscating-caesar/)
 
 ### Community
-- 💬 [GitHub Issues](https://github.com/ctrl-escp/restringer/issues) - Bug reports and feature requests  
-- 🐦 [Twitter @ctrl__esc](https://twitter.com/ctrl__esc) - Updates and discussions
+- [GitHub Issues](https://github.com/ctrl-escp/restringer/issues)
+- [Twitter @ctrl__esc](https://twitter.com/ctrl__esc)
 ---
 
 ## License
