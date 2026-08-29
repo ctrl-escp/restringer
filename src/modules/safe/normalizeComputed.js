@@ -1,3 +1,5 @@
+import {neutralizeInjectedString} from '../utils/neutralizeTraps.js';
+
 // A string that tests true for this regex cannot be used as a variable name.
 const BAD_IDENTIFIER_CHARS_REGEX = /([:!@#%^&*(){}[\]\\|/`'"]|[^\da-zA-Z_$])/;
 // A regex for a valid identifier name.
@@ -66,7 +68,7 @@ export function normalizeComputedTransform(arb, n) {
     computed: false,
     [relevantProperty]: {
       type: 'Identifier',
-      name: n[relevantProperty].value,
+      name: neutralizeInjectedString(n[relevantProperty].value),
     },
   });
   return arb;

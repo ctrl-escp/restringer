@@ -81,6 +81,12 @@ describe('SAFE: normalizeComputed', async () => {
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
+  it('TP-4: Neutralize debugger when converting computed access to an identifier', () => {
+    const code = 'obj[\'debugger\'];';
+    const expected = 'obj.debugge_;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
 });
 describe('SAFE: normalizeEmptyStatements', async () => {
   const targetModule = (await import('../src/modules/safe/normalizeEmptyStatements.js')).default;
@@ -1259,6 +1265,12 @@ describe('SAFE: resolveFunctionConstructorCalls', async () => {
   it('TP-6: Replace Function.constructor with empty body', () => {
     const code = 'const func = Function.constructor(\'\');';
     const expected = 'const func = function () {\n};';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-6b: Neutralize debugger identifier in constructor body', () => {
+    const code = 'const func = Function.constructor(\'return obj.debugger;\');';
+    const expected = 'const func = function () {\n  return obj.debugge_;\n};';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });

@@ -423,7 +423,33 @@ describe('UTILS: createNewNode', async () => {
     const result = targetModule(code);
     assert.deepStrictEqual(result, expected);
   });
+  it('TP-21: Neutralize debugger string literal', () => {
+    const result = targetModule('debugger');
+    assert.deepStrictEqual(result, {type: 'Literal', value: 'debugge_', raw: 'debugge_'});
+  });
 
+});
+describe('UTILS: neutralizeTraps', async () => {
+  const {neutralizeInjectedString, neutralizeInjectedNode} = await import('../src/modules/utils/neutralizeTraps.js');
+  it('TP-1: Replace debugger with debugge_', () => {
+    assert.strictEqual(neutralizeInjectedString('debugger'), 'debugge_');
+  });
+  it('TP-2: Leave Debugger unchanged (case-sensitive trap)', () => {
+    assert.strictEqual(neutralizeInjectedString('Debugger'), 'Debugger');
+  });
+  it('TP-3: Leave safe strings unchanged', () => {
+    assert.strictEqual(neutralizeInjectedString('hello'), 'hello');
+  });
+  it('TP-4: Pass non-strings through', () => {
+    assert.strictEqual(neutralizeInjectedString(42), 42);
+    assert.strictEqual(neutralizeInjectedString(true), true);
+    assert.strictEqual(neutralizeInjectedString(undefined), undefined);
+  });
+  it('TP-5: Neutralize identifier name on an injected node', () => {
+    const node = {type: 'Identifier', name: 'debugger'};
+    neutralizeInjectedNode(node);
+    assert.strictEqual(node.name, 'debugge_');
+  });
 });
 describe('UTILS: doesDescendantMatchCondition', async () => {
   const targetModule = (await import('../src/modules/utils/doesDescendantMatchCondition.js')).doesDescendantMatchCondition;

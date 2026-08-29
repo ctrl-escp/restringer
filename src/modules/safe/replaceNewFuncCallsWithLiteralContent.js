@@ -1,6 +1,7 @@
 import {getCache} from '../utils/getCache.js';
 import {generateFlatAST, logger} from 'flast';
 import {generateHash} from '../utils/generateHash.js';
+import {neutralizeInjectedNode} from '../utils/neutralizeTraps.js';
 
 /**
  * Parse a JavaScript code string into an AST body with appropriate normalization.
@@ -15,34 +16,34 @@ import {generateHash} from '../utils/generateHash.js';
  */
 function parseCodeStringToAST(codeStr) {
   if (!codeStr) {
-    return {
+    return neutralizeInjectedNode({
       type: 'Literal',
       value: codeStr,
-    };
+    });
   }
 
   const body = generateFlatAST(codeStr, {detailed: false, includeSrc: false})[0].body;
 
   if (body.length > 1) {
-    return {
+    return neutralizeInjectedNode({
       type: 'BlockStatement',
       body,
-    };
+    });
   }
 
   const singleStatement = body[0];
 
   // Unwrap single expressions from ExpressionStatement wrapper
   if (singleStatement.type === 'ExpressionStatement') {
-    return singleStatement.expression;
+    return neutralizeInjectedNode(singleStatement.expression);
   }
 
   // For immediately-executed functions, unwrap single return statements
   if (singleStatement.type === 'ReturnStatement' && singleStatement.argument) {
-    return singleStatement.argument;
+    return neutralizeInjectedNode(singleStatement.argument);
   }
 
-  return singleStatement;
+  return neutralizeInjectedNode(singleStatement);
 }
 
 /**

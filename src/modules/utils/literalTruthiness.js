@@ -5,9 +5,6 @@
 
 export const NOT_RESOLVABLE = Symbol('not-resolvable');
 
-const DEBUGGER_TRAP = /debugger/gi;
-const DEBUGGER_REPLACEMENT = 'debugge_';
-
 const ALWAYS_TRUTHY_NODE_TYPES = [
   'ArrayExpression',
   'ObjectExpression',
@@ -28,21 +25,6 @@ const LITERAL_IDENTIFIER_VALUES = {
  * @param {*} value - Value to test
  * @return {boolean} Whether the value is truthy
  */
-/**
- * Mirrors evalInVm trap neutralization so folding `'debu' + 'gger'` does not
- * reconstruct the `debugger` keyword that obfuscators split to evade detection.
- *
- * @param {*} value - Folded operator result
- * @return {*} The value with `debugger` replaced by `debugge_` in strings
- */
-export function neutralizeDebuggerValue(value) {
-  if (typeof value !== 'string') {
-    return value;
-  }
-  DEBUGGER_TRAP.lastIndex = 0;
-  return value.replace(DEBUGGER_TRAP, DEBUGGER_REPLACEMENT);
-}
-
 export function isLiteralTruthy(value) {
   if (value === false || value === 0 || value === -0 || value === 0n ||
 		value === '' || value === null || value === undefined) {

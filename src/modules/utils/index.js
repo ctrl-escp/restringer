@@ -13,6 +13,8 @@ export default {
   getObjType: (await import('./getObjType.js')).getObjType,
   isNodeInRanges: (await import('./isNodeInRanges.js')).isNodeInRanges,
   literalTruthiness: (await import('./literalTruthiness.js')),
+  neutralizeInjectedString: (await import('./neutralizeTraps.js')).neutralizeInjectedString,
+  neutralizeInjectedNode: (await import('./neutralizeTraps.js')).neutralizeInjectedNode,
   normalizeScript: (await import('./normalizeScript.js')).normalizeScript,
   safeImplementations: (await import('./safeImplementations.js')),
   sandbox: (await import('./sandbox.js')).Sandbox,

@@ -1,7 +1,7 @@
 import {createNewNode} from '../utils/createNewNode.js';
 import {BAD_VALUE} from '../config.js';
 import {doesDescendantMatchCondition} from '../utils/doesDescendantMatchCondition.js';
-import {evaluateResolvableValue, neutralizeDebuggerValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
+import {evaluateResolvableValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Identifies unary and binary expressions that can be resolved to simplified values.
@@ -56,7 +56,7 @@ export function resolveMinimalAlphabetTransform(arb, n) {
   if (value === NOT_RESOLVABLE) {
     return arb;
   }
-  const replacementNode = createNewNode(neutralizeDebuggerValue(value));
+  const replacementNode = createNewNode(value);
   if (replacementNode !== BAD_VALUE) {
     arb.markNode(n, replacementNode);
   }

@@ -1,6 +1,6 @@
 import {createNewNode} from '../utils/createNewNode.js';
 import {BAD_VALUE} from '../config.js';
-import {evaluateResolvableValue, neutralizeDebuggerValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
+import {evaluateResolvableValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 const NOT_LITERAL = Symbol('not-literal');
 const CANNOT_APPLY = Symbol('cannot-apply');
@@ -459,7 +459,7 @@ function simplifyNode(node) {
   if (leftValue !== NOT_LITERAL && rightValue !== NOT_LITERAL) {
     const folded = applyBinaryOp(node.operator, leftValue, rightValue);
     if (folded !== CANNOT_APPLY) {
-      const replacement = literalNodeFromValue(neutralizeDebuggerValue(folded));
+      const replacement = literalNodeFromValue(folded);
       if (replacement) {
         return replacement;
       }
@@ -536,7 +536,7 @@ export function resolveNestedBinaryExpressionsTransform(arb, n) {
  * because those operators always coerce with ToNumber/ToBigInt.
  * Pure `-` chains can combine subtracted literals (`a - 2 - 3` → `a - 5`).
  * `+` is never reassociated around unknowns (`a + 2 + 3` stays; `a` may be a string).
- * String results that reconstruct `debugger` are neutralized to `debugge_` (same as evalInVm traps).
+ * String results that reconstruct `debugger` are neutralized to `debugge_` via createNewNode.
  *
  * Transforms:
  *   2 * (5 + 1) - (4 / 2) + '1' * 2 → 12

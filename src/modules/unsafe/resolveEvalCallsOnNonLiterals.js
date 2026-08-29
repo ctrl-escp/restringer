@@ -3,6 +3,7 @@ import {Sandbox} from '../utils/sandbox.js';
 import {evalInVm} from '../utils/evalInVm.js';
 import {createOrderedSrc} from '../utils/createOrderedSrc.js';
 import {getDeclarationWithContext} from '../utils/getDeclarationWithContext.js';
+import {neutralizeInjectedNode} from '../utils/neutralizeTraps.js';
 
 /**
  * Identifies CallExpression nodes for eval() with non-literal arguments that can be resolved.
@@ -78,6 +79,7 @@ export function resolveEvalCallsOnNonLiteralsTransform(arb, matches) {
           } finally {
             // Fallback to unparsed literal if parsing results in empty program
             if (!replacementNode.body.length) replacementNode = newNode;
+            else replacementNode = neutralizeInjectedNode(replacementNode);
           }
         }
       } catch {
