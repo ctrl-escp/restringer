@@ -1421,10 +1421,52 @@ describe('UTILS: Sandbox', async () => {
     const result = sandbox.run('typeof WebAssembly');
     assert.strictEqual(result.copySync(), 'undefined');
   });
-  it('TP-9: Blocked API - fetch is undefined', () => {
+  it('TP-9: fetch is an inert BOM stub', () => {
     const sandbox = new Sandbox();
     const result = sandbox.run('typeof fetch');
-    assert.strictEqual(result.copySync(), 'undefined');
+    assert.strictEqual(result.copySync(), 'function');
+  });
+  it('TP-9.1: Node and Deno host builtins are hidden', () => {
+    const sandbox = new Sandbox();
+    const result = sandbox.run(`({
+      process: typeof process,
+      Buffer: typeof Buffer,
+      require: typeof require,
+      fs: typeof fs,
+      child_process: typeof child_process,
+      Deno: typeof Deno,
+      Bun: typeof Bun,
+    })`);
+    assert.deepStrictEqual(result.copySync(), {
+      process: 'undefined',
+      Buffer: 'undefined',
+      require: 'undefined',
+      fs: 'undefined',
+      child_process: 'undefined',
+      Deno: 'undefined',
+      Bun: 'undefined',
+    });
+  });
+  it('TP-9.2: BOM objects exist as inert stubs', () => {
+    const sandbox = new Sandbox();
+    const result = sandbox.run(`({
+      navigator: typeof navigator,
+      windowObj: typeof window === 'object',
+      location: typeof location,
+      localStorage: typeof localStorage,
+      xhr: typeof XMLHttpRequest,
+      accessThrows: (function () {
+        try { navigator.sendBeacon; return false; } catch (e) { return true; }
+      })()
+    })`);
+    assert.deepStrictEqual(result.copySync(), {
+      navigator: 'object',
+      windowObj: true,
+      location: 'object',
+      localStorage: 'object',
+      xhr: 'function',
+      accessThrows: true,
+    });
   });
   it('TP-10: isReference method correctly identifies VM References', () => {
     const sandbox = new Sandbox();

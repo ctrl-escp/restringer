@@ -1,4 +1,4 @@
-import {BLOCKED_APIS, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT} from '../constants.js';
+import {ISOLATE_HARDENING_SOURCE, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT} from '../constants.js';
 
 /**
  * @return {Promise<Object>} Loaded isolated-vm module namespace
@@ -31,13 +31,11 @@ export async function createIsolatedVmProvider() {
       const memoryLimit = Number(options.memoryLimit ?? DEFAULT_MEMORY_LIMIT);
       const isolate = new Isolate({memoryLimit});
       const context = isolate.createContextSync();
-      context.global.setSync('global', context.global.derefInto());
-
-      const blockedApiNames = Object.keys(BLOCKED_APIS);
-      for (let i = 0; i < blockedApiNames.length; i++) {
-        const itemName = blockedApiNames[i];
-        context.global.setSync(itemName, BLOCKED_APIS[itemName]);
-      }
+      // Session start only. isolated-vm has no Node host objects, so this is
+      // Date/random + compact BOM stubs (ISOLATE_HARDENING_SOURCE), not the
+      // 80-name process wipe. Per-eval wipe used to recompile that on every run.
+      isolate.compileScriptSync('delete Math.random; delete globalThis.Date;\n' + ISOLATE_HARDENING_SOURCE)
+        .runSync(context);
 
       return {
         providerName: 'isolated-vm',
@@ -46,7 +44,7 @@ export async function createIsolatedVmProvider() {
           strictIsolation: true,
         },
         run(code) {
-          const script = isolate.compileScriptSync('delete Math.random; delete Date;\n\n' + code);
+          const script = isolate.compileScriptSync(code);
           const result = script.runSync(context, {
             timeout,
             reference: true,
@@ -59,7 +57,7 @@ export async function createIsolatedVmProvider() {
           }
         },
         exec(code) {
-          const script = isolate.compileScriptSync('delete Math.random; delete Date;\n\n' + code);
+          const script = isolate.compileScriptSync(code);
           script.runSync(context, {timeout});
         },
         close() {

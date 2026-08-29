@@ -3,15 +3,31 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {parentPort, workerData} from 'node:worker_threads';
+import {createBlockedApisSource} from '../constants.js';
 
 const READY_TYPE = 'ready';
 const RESPONSE_TYPE = 'response';
 
+/**
+ * Node/Bun `--eval` bootstrap. Built once per child process.
+ *
+ * Order is load-bearing:
+ *   1. Capture `process.stdout` / `process.stdin` into locals (IPC).
+ *   2. Define send / serialize / handleRequest against those locals.
+ *   3. Delete `Math.random` and `Date` (non-determinism).
+ *   4. Shadow CJS free vars (`require`, `module`, …). Node `--eval` exposes
+ *      these as script locals, not only `globalThis.require`, so a global
+ *      wipe is not enough.
+ *   5. Run process hardening once (host wipe + BOM stubs). Later evals are
+ *      history + guest code only - re-wiping on every request doubled tests.
+ */
 function createNodeLikeBootstrap() {
   return `
 const readline = require('node:readline');
+const stdout = process.stdout;
+const stdin = process.stdin;
 function send(message) {
-  process.stdout.write(JSON.stringify(message) + '\\n');
+  stdout.write(JSON.stringify(message) + '\\n');
 }
 function serialize(value, seen = new WeakSet()) {
   if (value === null) return { type: 'null' };
@@ -51,23 +67,12 @@ function createRequestSource(history, code, mode) {
   const finalSource = mode === 'exec'
     ? code + '\\nconst __restringerResult = undefined;'
     : 'const __restringerResult = eval(' + JSON.stringify(code) + ');';
-  return [
-    'delete Math.random;',
-    'delete Date;',
-    'globalThis.fetch = undefined;',
-    'globalThis.XMLHttpRequest = undefined;',
-    'globalThis.WebSocket = undefined;',
-    'globalThis.WebAssembly = undefined;',
-    'globalThis.navigator = undefined;',
-    'globalThis.Navigator = undefined;',
-    historySource,
-    finalSource,
-  ].join('\\n');
+  return [historySource, finalSource].join('\\n');
 }
 function handleRequest(request) {
   try {
     const source = createRequestSource(request.history || [], request.code, request.mode);
-    const value = (0, eval)(source + '\\n__restringerResult;');
+    const value = (0, eval)(source + '\\n__restringerResult;'); // indirect eval; see hideBlockedApis()
     send({ type: 'response', requestId: request.requestId, ok: true, value: serialize(value) });
   } catch (error) {
     send({
@@ -78,7 +83,15 @@ function handleRequest(request) {
     });
   }
 }
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+delete Math.random;
+delete Date;
+require = undefined;
+module = undefined;
+exports = undefined;
+__filename = undefined;
+__dirname = undefined;
+${createBlockedApisSource()}
+const rl = readline.createInterface({ input: stdin, crlfDelay: Infinity });
 rl.on('line', line => {
   if (!line) return;
   handleRequest(JSON.parse(line));
@@ -88,6 +101,7 @@ send({ type: 'ready' });
 }
 
 const DENO_ENGINE_PATH = fileURLToPath(new URL('./sandboxEngineDeno.js', import.meta.url));
+const SANDBOX_CONSTANTS_PATH = fileURLToPath(new URL('../constants.js', import.meta.url));
 
 function getRuntimeCommand(runtime, strict, executablePath) {
   switch (runtime) {
@@ -113,7 +127,14 @@ function getRuntimeCommand(runtime, strict, executablePath) {
         command: executablePath || 'deno',
         args: [
           'run',
-          ...(strict ? ['--deny-read', '--deny-write', '--deny-net', '--deny-run', '--deny-env'] : []),
+          ...(strict ? [
+            // Engine imports constants.js; --deny-read would break that load.
+            `--allow-read=${DENO_ENGINE_PATH},${SANDBOX_CONSTANTS_PATH}`,
+            '--deny-write',
+            '--deny-net',
+            '--deny-run',
+            '--deny-env',
+          ] : []),
           DENO_ENGINE_PATH,
         ],
       };
