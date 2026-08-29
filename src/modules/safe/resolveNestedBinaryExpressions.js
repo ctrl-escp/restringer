@@ -1,33 +1,17 @@
 import {createNewNode} from '../utils/createNewNode.js';
 import {BAD_VALUE} from '../config.js';
+import {evaluateResolvableValue, neutralizeDebuggerValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 const NOT_LITERAL = Symbol('not-literal');
 const CANNOT_APPLY = Symbol('cannot-apply');
 
 const UNARY_OPERATORS = ['+', '-', '!', '~'];
 const MUL_OPERATORS = ['*', '/'];
-const DEBUGGER_TRAP = /debugger/gi;
-const DEBUGGER_REPLACEMENT = 'debugge_';
 const LITERAL_IDENTIFIER_VALUES = {
   NaN,
   Infinity,
   undefined,
 };
-
-/**
- * Mirrors evalInVm trap neutralization so folding `'debu' + 'gger'` does not
- * reconstruct the `debugger` keyword that obfuscators split to evade detection.
- *
- * @param {*} value - Folded operator result
- * @return {*} The value with `debugger` replaced by `debugge_` in strings
- */
-function neutralizeDebuggerValue(value) {
-  if (typeof value !== 'string') {
-    return value;
-  }
-  DEBUGGER_TRAP.lastIndex = 0;
-  return value.replace(DEBUGGER_TRAP, DEBUGGER_REPLACEMENT);
-}
 
 /**
  * Applies a unary operator to a known primitive value using JavaScript semantics.
@@ -120,7 +104,9 @@ function applyBinaryOp(operator, left, right) {
 
 /**
  * Extracts a JavaScript value from a literal-like AST node.
- * Supports Literals, unary + - ! ~ of literal-like nodes, and NaN/Infinity/undefined identifiers.
+ * Supports Literals, unary + - ! ~ of literal-like nodes, NaN/Infinity/undefined
+ * identifiers, and ArrayExpressions whose elements are themselves literal-like
+ * (so `+[]`, `[] + []`, and `[][[]] + []` can fold without eval). Object literals are skipped.
  *
  * @param {ASTNode} node - Node to read
  * @return {*|symbol} The JS value, or NOT_LITERAL
@@ -158,6 +144,29 @@ function getLiteralLikeValue(node) {
       return NOT_LITERAL;
     }
     return applyUnaryOp(node.operator, argumentValue);
+  }
+
+  if (node.type === 'ArrayExpression') {
+    const elements = [];
+    const src = node.elements || [];
+    for (let i = 0; i < src.length; i++) {
+      const element = src[i];
+      if (!element) {
+        elements.push(undefined);
+        continue;
+      }
+      const elementValue = getLiteralLikeValue(element);
+      if (elementValue === NOT_LITERAL) {
+        return NOT_LITERAL;
+      }
+      elements.push(elementValue);
+    }
+    return elements;
+  }
+
+  if (node.type === 'MemberExpression' || node.type === 'CallExpression') {
+    const value = evaluateResolvableValue(node);
+    return value === NOT_RESOLVABLE ? NOT_LITERAL : value;
   }
 
   return NOT_LITERAL;

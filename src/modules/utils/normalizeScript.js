@@ -1,7 +1,7 @@
 import {applyIteratively} from 'flast';
 import * as normalizeComputed from '../safe/normalizeComputed.js';
 import * as normalizeEmptyStatements from '../safe/normalizeEmptyStatements.js';
-import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotOperator.js';
+import * as normalizeRedundantNotOperator from '../safe/normalizeRedundantNotOperator.js';
 
 /**
  * Normalizes JavaScript code to improve readability without affecting functionality.

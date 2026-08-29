@@ -1,27 +1,4 @@
-/**
- * Determines whether a literal value is truthy in JavaScript context.
- *
- * This helper evaluates literal values according to JavaScript truthiness rules:
- * - false, 0, -0, 0n, "", null, undefined, NaN are falsy
- * - All other values are truthy
- *
- * @param {*} value - The literal value to evaluate
- * @return {boolean} Whether the value is truthy
- */
-function isLiteralTruthy(value) {
-  // Handle special JavaScript falsy values
-  if (value === false || value === 0 || value === -0 || value === 0n ||
-		value === '' || value === null || value === undefined) {
-    return false;
-  }
-
-  // Handle NaN (NaN !== NaN is true)
-  if (typeof value === 'number' && value !== value) {
-    return false;
-  }
-
-  return true;
-}
+import {isLiteralTruthy, applyUnaryOp, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Evaluates a test condition to get its literal value for truthiness testing.
@@ -42,19 +19,8 @@ function evaluateTestValue(testNode) {
     const argument = testNode.argument.value;
     const operator = testNode.operator;
 
-    switch (operator) {
-      case '-':
-        return -argument;
-      case '+':
-        return +argument;
-      case '!':
-        return !argument;
-      case '~':
-        return ~argument;
-      default:
-        // For any other unary operators, return the original argument
-        return argument;
-    }
+    const evaluated = applyUnaryOp(operator, argument);
+    return evaluated === NOT_RESOLVABLE ? argument : evaluated;
   }
 
   // Fallback (should not reach here if match function works correctly)

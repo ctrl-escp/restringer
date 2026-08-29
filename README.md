@@ -232,14 +232,14 @@ import {safe, unsafe} from 'restringer';
 // Import specific modules
 const normalizeComputed = safe.normalizeComputed.default;
 const removeRedundantBlockStatements = safe.removeRedundantBlockStatements.default;
-const resolveDefiniteBinaryExpressions = unsafe.resolveDefiniteBinaryExpressions.default;
+const resolveNestedBinaryExpressions = safe.resolveNestedBinaryExpressions.default;
 const resolveLocalCalls = unsafe.resolveLocalCalls.default;
 
 let script = 'your obfuscated code here';
 
 // Define custom deobfuscation pipeline
 const customModules = [
-  resolveDefiniteBinaryExpressions,  // Resolve literal math operations
+  resolveNestedBinaryExpressions,    // Fold literal math without eval
   resolveLocalCalls,                 // Inline function calls
   normalizeComputed,                 // Convert obj['prop'] to obj.prop
   removeRedundantBlockStatements,    // Clean up unnecessary blocks

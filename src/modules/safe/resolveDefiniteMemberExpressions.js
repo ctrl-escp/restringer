@@ -1,7 +1,50 @@
-import {Sandbox} from '../utils/sandbox.js';
-import {evalInVm} from '../utils/evalInVm.js';
+import {createNewNode} from '../utils/createNewNode.js';
+import {BAD_VALUE} from '../config.js';
+import {evaluateResolvableValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 const VALID_OBJECT_TYPES = ['ArrayExpression', 'Literal'];
+
+/**
+ * Resolves a member expression on a string or array literal to a JS value.
+ * Returns undefined for out-of-bounds access, holes, and non-index properties
+ * (matching previous sandbox behavior that left those nodes unchanged).
+ *
+ * @param {ASTNode} n - MemberExpression node
+ * @return {*|undefined} Resolved value, or undefined when the access cannot be folded
+ */
+function resolveMemberValue(n) {
+  const obj = n.object;
+  const key = n.property.type === 'Literal' ? n.property.value : n.property.name;
+
+  if (obj.type === 'Literal' && typeof obj.value === 'string') {
+    const result = obj.value[key];
+    if (typeof result === 'string' || (key === 'length' && typeof result === 'number')) {
+      return result;
+    }
+    return undefined;
+  }
+
+  if (obj.type === 'ArrayExpression') {
+    if (key === 'length') {
+      return obj.elements.length;
+    }
+    const index = typeof key === 'number' ? key : Number(key);
+    if (!Number.isInteger(index) || index < 0 || index >= obj.elements.length) {
+      return undefined;
+    }
+    const element = obj.elements[index];
+    if (!element) {
+      return undefined;
+    }
+    const value = evaluateResolvableValue(element);
+    if (value === NOT_RESOLVABLE || value === undefined) {
+      return undefined;
+    }
+    return value;
+  }
+
+  return undefined;
+}
 
 /**
  * Identifies MemberExpression nodes that can be safely resolved to literal values.
@@ -48,27 +91,19 @@ export function resolveDefiniteMemberExpressionsMatch(arb, candidateFilter = () 
 }
 
 /**
- * Transforms matched MemberExpression nodes by evaluating them in a sandbox
- * and replacing them with their computed literal values.
+ * Transforms a matched MemberExpression by replacing it with its resolved literal.
  * @param {Arborist} arb - The Arborist instance
- * @param {ASTNode[]} matches - Array of MemberExpression nodes to transform
+ * @param {ASTNode} n - MemberExpression node to transform
  * @return {Arborist} The updated Arborist instance
  */
-export function resolveDefiniteMemberExpressionsTransform(arb, matches) {
-  if (!matches.length) return arb;
-
-  const sharedSb = new Sandbox();
-  try {
-    for (let i = 0; i < matches.length; i++) {
-      const n = matches[i];
-      const replacementNode = evalInVm(n.src, sharedSb);
-
-      if (replacementNode !== evalInVm.BAD_VALUE) {
-        arb.markNode(n, replacementNode);
-      }
-    }
-  } finally {
-    sharedSb.close();
+export function resolveDefiniteMemberExpressionsTransform(arb, n) {
+  const value = resolveMemberValue(n);
+  if (value === undefined) {
+    return arb;
+  }
+  const replacementNode = createNewNode(value);
+  if (replacementNode !== BAD_VALUE) {
+    arb.markNode(n, replacementNode);
   }
   return arb;
 }
@@ -83,5 +118,9 @@ export function resolveDefiniteMemberExpressionsTransform(arb, matches) {
  */
 export default function resolveDefiniteMemberExpressions(arb, candidateFilter = () => true) {
   const matches = resolveDefiniteMemberExpressionsMatch(arb, candidateFilter);
-  return resolveDefiniteMemberExpressionsTransform(arb, matches);
+
+  for (let i = 0; i < matches.length; i++) {
+    arb = resolveDefiniteMemberExpressionsTransform(arb, matches[i]);
+  }
+  return arb;
 }

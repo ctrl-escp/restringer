@@ -1,5 +1,7 @@
-import {evalInVm} from '../utils/evalInVm.js';
+import {createNewNode} from '../utils/createNewNode.js';
+import {BAD_VALUE} from '../config.js';
 import {doesDescendantMatchCondition} from '../utils/doesDescendantMatchCondition.js';
+import {evaluateResolvableValue, neutralizeDebuggerValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Identifies unary and binary expressions that can be resolved to simplified values.
@@ -26,11 +28,10 @@ export function resolveMinimalAlphabetMatch(arb, candidateFilter = () => true) {
     }
   }
 
-  // Process binary expressions: [] + [], [+[]], etc.
+  // Process binary expressions: [] + [], [][[]] + [], true + [].flat, etc.
   for (let i = 0; i < binaryNodes.length; i++) {
     const n = binaryNodes[i];
     if (n.operator === '+' &&
-		(n.left.type !== 'MemberExpression' && Number.isNaN(parseFloat(n.left?.value))) &&
 		n.left?.type !== 'ThisExpression' &&
 		n.right?.type !== 'ThisExpression' &&
 		candidateFilter(n)) {
@@ -44,23 +45,21 @@ export function resolveMinimalAlphabetMatch(arb, candidateFilter = () => true) {
 }
 
 /**
- * Transforms unary and binary expressions by evaluating them to their simplified values.
- * Uses sandbox evaluation to safely convert JSFuck-style obfuscated expressions.
+ * Transforms unary and binary expressions by folding JSFuck-style coercions
+ * (ToNumber / ToString on arrays, booleans, and null) without evaluating source text.
  * @param {Arborist} arb - Arborist instance
- * @param {ASTNode[]} matches - Array of expression nodes to transform
+ * @param {ASTNode} n - Expression node to transform
  * @return {Arborist} The modified Arborist instance
  */
-export function resolveMinimalAlphabetTransform(arb, matches) {
-  if (!matches.length) return arb;
-
-  for (let i = 0; i < matches.length; i++) {
-    const n = matches[i];
-    const replacementNode = evalInVm(n.src);
-    if (replacementNode !== evalInVm.BAD_VALUE) {
-      arb.markNode(n, replacementNode);
-    }
+export function resolveMinimalAlphabetTransform(arb, n) {
+  const value = evaluateResolvableValue(n);
+  if (value === NOT_RESOLVABLE) {
+    return arb;
   }
-
+  const replacementNode = createNewNode(neutralizeDebuggerValue(value));
+  if (replacementNode !== BAD_VALUE) {
+    arb.markNode(n, replacementNode);
+  }
   return arb;
 }
 
@@ -74,5 +73,9 @@ export function resolveMinimalAlphabetTransform(arb, matches) {
  */
 export default function resolveMinimalAlphabet(arb, candidateFilter = () => true) {
   const matches = resolveMinimalAlphabetMatch(arb, candidateFilter);
-  return resolveMinimalAlphabetTransform(arb, matches);
+
+  for (let i = 0; i < matches.length; i++) {
+    arb = resolveMinimalAlphabetTransform(arb, matches[i]);
+  }
+  return arb;
 }

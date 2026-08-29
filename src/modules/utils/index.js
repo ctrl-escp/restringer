@@ -12,6 +12,7 @@ export default {
   getMainDeclaredObjectOfMemberExpression: (await import('./getMainDeclaredObjectOfMemberExpression.js')).getMainDeclaredObjectOfMemberExpression,
   getObjType: (await import('./getObjType.js')).getObjType,
   isNodeInRanges: (await import('./isNodeInRanges.js')).isNodeInRanges,
+  literalTruthiness: (await import('./literalTruthiness.js')),
   normalizeScript: (await import('./normalizeScript.js')).normalizeScript,
   safeImplementations: (await import('./safeImplementations.js')),
   sandbox: (await import('./sandbox.js')).Sandbox,
