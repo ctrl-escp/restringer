@@ -33,10 +33,10 @@
     }
   },
   "scripts": {
-    "test": "node --test --trace-warnings --no-node-snapshot",
-    "test:coverage": "node --test --trace-warnings --no-node-snapshot --experimental-test-coverage",
-    "test:quick": "node --test --trace-warnings --no-node-snapshot tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
-    "test:quick:watch": "node --test --trace-warnings --no-node-snapshot --watch tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
+    "test": "node --test tests/*.test.js --trace-warnings --no-node-snapshot",
+    "test:coverage": "node --test tests/*.test.js --trace-warnings --no-node-snapshot --experimental-test-coverage",
+    "test:quick": "node --test tests/*.test.js --trace-warnings --no-node-snapshot tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
+    "test:quick:watch": "node --test tests/*.test.js --trace-warnings --no-node-snapshot --watch tests/functionality.test.js tests/modules.*.test.js tests/processors.test.js tests/utils.test.js tests/deobfuscation.test.js",
     "lint": "npx eslint .",
     "lint:fix": "npx eslint . --fix"
   },
