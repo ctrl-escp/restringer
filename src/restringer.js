@@ -64,6 +64,7 @@ export class REstringer {
       safe.replaceEvalCallsWithLiteralContent,
       safe.replaceIdentifierWithFixedAssignedValue,
       safe.replaceIdentifierWithFixedValueNotAssignedAtDeclaration,
+      safe.resolveNestedBinaryExpressions,
       safe.replaceNewFuncCallsWithLiteralContent,
       safe.replaceBooleanExpressionsWithIf,
       safe.replaceSequencesWithExpressions,

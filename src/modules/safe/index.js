@@ -18,6 +18,7 @@ export const resolveDeterministicIfStatements = await import('./resolveDetermini
 export const resolveFunctionConstructorCalls = await import('./resolveFunctionConstructorCalls.js');
 export const resolveMemberExpressionReferencesToArrayIndex = await import('./resolveMemberExpressionReferencesToArrayIndex.js');
 export const resolveMemberExpressionsWithDirectAssignment = await import('./resolveMemberExpressionsWithDirectAssignment.js');
+export const resolveNestedBinaryExpressions = await import('./resolveNestedBinaryExpressions.js');
 export const resolveProxyCalls = await import('./resolveProxyCalls.js');
 export const resolveProxyReferences = await import('./resolveProxyReferences.js');
 export const resolveProxyVariables = await import('./resolveProxyVariables.js');

@@ -1288,6 +1288,155 @@ describe('SAFE: resolveMemberExpressionsWithDirectAssignment', async () => {
     assert.strictEqual(result, expected);
   });
 });
+describe('SAFE: resolveNestedBinaryExpressions', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveNestedBinaryExpressions.js')).default;
+  it('TP-1: Fold mixed arithmetic including string-to-number multiply', () => {
+    const code = '2 * (5 + 1) - (4 / 2) + \'1\' * 2;';
+    const expected = '12;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-2: Fold mixed arithmetic then string concatenation', () => {
+    const code = '2 * (5 + 1) - (4 / 2) + \'1\';';
+    const expected = '\'101\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-3: Fold literal subtrees while leaving a + 0 intact', () => {
+    const code = '2 * (a + 0) - ((5 - 1) / 2);';
+    const expected = '2 * (a + 0) - 2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-4: Respect operator precedence without parentheses', () => {
+    const code = '1 + 2 * 2;';
+    const expected = '5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-5: Fold parenthesized addition before multiply', () => {
+    const code = '(1 + 2) * 2;';
+    const expected = '6;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-6: Fold left-associative literals on the left of an identifier', () => {
+    const code = '2 + 3 + a;';
+    const expected = '5 + a;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-7: Regroup multiplicative literals around an identifier', () => {
+    const code = 'a * 2 * 3;';
+    const expected = '6 * a;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-8: Combine subtracted literals in a pure minus chain', () => {
+    const code = 'a - 2 - 3;';
+    const expected = 'a - 5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-9: Concatenate left-to-right once a string appears', () => {
+    const code = '\'1\' + 2 + 3;';
+    const expected = '\'123\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-10: Add numbers before concatenating a string', () => {
+    const code = '1 + 2 + \'3\';';
+    const expected = '\'33\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-11: Fold parenthesized literals beside an identifier', () => {
+    const code = 'a + (2 + 3);';
+    const expected = 'a + 5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-12: Fold bitwise AND of literals', () => {
+    const code = '5 & 3;';
+    const expected = '1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-13: Fold comparison of literals', () => {
+    const code = '5 > 3;';
+    const expected = 'true;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-14: Fold subtraction to a negative number', () => {
+    const code = '10 - 15;';
+    const expected = '-5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-15: Neutralize debugger reconstructed from split strings', () => {
+    const code = '\'debu\' + \'gger\';';
+    const expected = '\'debugge_\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-16: Neutralize debugger in concatenated strings regardless of split', () => {
+    const code = '\'debug\' + \'ger\';';
+    const expected = '\'debugge_\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-1: Do not fold a + 0 (identifier may be a string)', () => {
+    const code = 'a + 0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-2: Do not fold a * 1 (identifier may be a string)', () => {
+    const code = 'a * 1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-3: Do not fold a * 0 to 0 (non-numeric values become NaN)', () => {
+    const code = 'a * 0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-4: Do not reassociate a + 2 + 3 around an identifier', () => {
+    const code = 'a + 2 + 3;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-5: Do not reassociate a + 2 + 3 + b around identifiers', () => {
+    const code = 'a + 2 + 3 + b;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-6: Do not flatten mixed plus and minus around an identifier', () => {
+    const code = 'a - 2 + 3;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-7: Do not fold expressions with function calls', () => {
+    const code = 'foo() + 1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-8: Do not fold member expressions', () => {
+    const code = 'obj.x * 2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-9: Do not fold logical expressions', () => {
+    const code = 'true && false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-10: Do not fold two unknown identifiers', () => {
+    const code = 'a + b;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+});
 describe('SAFE: resolveProxyCalls', async () => {
   const targetModule = (await import('../src/modules/safe/resolveProxyCalls.js')).default;
   it('TP-1: Replace chained proxy calls with direct function calls', () => {
