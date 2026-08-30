@@ -67,9 +67,27 @@ function functionCallsFactory(funcNode, factoryName) {
 }
 
 /**
- * @param {ASTNode} call
- * @return {boolean}
+ * IIFEs that take the factory as an argument (checksum / hop-count rotate).
+ *
+ * @param {ASTNode[]} calls
+ * @param {string} factoryName
+ * @return {ASTNode[]}
  */
+function findFactoryRotateIifes(calls, factoryName) {
+  const iifes = [];
+  for (let i = 0; i < calls.length; i++) {
+    const n = calls[i];
+    const calleeType = n.callee?.type;
+    if (calleeType !== 'FunctionExpression' && calleeType !== 'ArrowFunctionExpression') {
+      continue;
+    }
+    if (n.arguments?.[0]?.type === 'Identifier' && n.arguments[0].name === factoryName) {
+      iifes.push(n);
+    }
+  }
+  return iifes;
+}
+
 function allLiteralArgs(call) {
   const args = call.arguments || [];
   if (!args.length) {
@@ -119,6 +137,15 @@ export function flattenStringArrayDecoderMatch(arb, candidateFilter = () => true
     }
 
     const decoderNames = new Set(decoders.map(d => d.id?.name).filter(Boolean));
+    const aliases = [];
+    const declarators = arb.ast[0].typeMap.VariableDeclarator || [];
+    for (let j = 0; j < declarators.length; j++) {
+      const init = declarators[j].init;
+      if (init?.type === 'Identifier' && decoderNames.has(init.name) && declarators[j].id?.name) {
+        decoderNames.add(declarators[j].id.name);
+        aliases.push(declarators[j]);
+      }
+    }
     const literalCalls = [];
     for (let j = 0; j < calls.length; j++) {
       const call = calls[j];
@@ -129,7 +156,13 @@ export function flattenStringArrayDecoderMatch(arb, candidateFilter = () => true
       }
     }
     if (literalCalls.length) {
-      matches.push({factory, decoders, literalCalls});
+      matches.push({
+        factory,
+        decoders,
+        aliases,
+        literalCalls,
+        rotateIifes: findFactoryRotateIifes(calls, factoryName),
+      });
     }
   }
   return matches;
@@ -143,13 +176,25 @@ export function flattenStringArrayDecoderMatch(arb, candidateFilter = () => true
  * @return {Arborist}
  */
 export function flattenStringArrayDecoderTransform(arb, match) {
-  const {factory, decoders, literalCalls} = match;
+  const {factory, decoders, literalCalls, rotateIifes} = match;
+  const aliases = match.aliases || [];
   const contextParts = [factory.src];
+  const rotates = rotateIifes || [];
+  for (let i = 0; i < rotates.length; i++) {
+    contextParts.push(rotates[i].src + ';');
+  }
   for (let i = 0; i < decoders.length; i++) {
     contextParts.push(decoders[i].src);
     const extra = getDeclarationWithContext(decoders[i], true);
     if (extra.length) {
       contextParts.push(createOrderedSrc(extra));
+    }
+  }
+  for (let i = 0; i < aliases.length; i++) {
+    const parent = aliases[i].parentNode;
+    const aliasSrc = parent?.type === 'VariableDeclaration' ? parent.src : aliases[i].src;
+    if (aliasSrc) {
+      contextParts.push(aliasSrc.endsWith(';') ? aliasSrc : `${aliasSrc};`);
     }
   }
   const callSrcs = [];
@@ -170,7 +215,84 @@ export function flattenStringArrayDecoderTransform(arb, match) {
       arb.markNode(literalCalls[i], elements[i]);
     }
   }
+
+  const replacedCalls = new Set(literalCalls);
+  const rotateStmts = [];
+  for (let i = 0; i < rotates.length; i++) {
+    let stmt = rotates[i];
+    while (stmt && stmt.type !== 'ExpressionStatement' && stmt.type !== 'Program') {
+      stmt = stmt.parentNode;
+    }
+    if (stmt && stmt.type === 'ExpressionStatement') {
+      rotateStmts.push(stmt);
+    }
+  }
+  const scaffolding = new Set([factory, ...decoders, ...rotateStmts, ...rotates]);
+  const unusedAliasDecls = [];
+  for (let i = 0; i < aliases.length; i++) {
+    const alias = aliases[i];
+    if (!alias.id || hasRefsOutsideScaffolding(alias.id, replacedCalls, scaffolding)) {
+      continue;
+    }
+    const decl = alias.parentNode;
+    if (decl?.type === 'VariableDeclaration' && decl.declarations.length === 1) {
+      unusedAliasDecls.push(decl);
+      scaffolding.add(alias);
+      scaffolding.add(decl);
+    }
+  }
+
+  const unusedDecoders = [];
+  for (let i = 0; i < decoders.length; i++) {
+    if (decoders[i].id && !hasRefsOutsideScaffolding(decoders[i].id, replacedCalls, scaffolding)) {
+      unusedDecoders.push(decoders[i]);
+    }
+  }
+  const unusedFactory = factory.id && !hasRefsOutsideScaffolding(factory.id, replacedCalls, scaffolding);
+  // Only drop the rotator when the factory and every decoder are also unused.
+  // A leftover `dec(idx)` still needs the live rotate IIFE at runtime.
+  if (unusedFactory && unusedDecoders.length === decoders.length) {
+    arb.markNode(factory);
+    for (let i = 0; i < unusedDecoders.length; i++) {
+      arb.markNode(unusedDecoders[i]);
+    }
+    for (let i = 0; i < rotateStmts.length; i++) {
+      arb.markNode(rotateStmts[i]);
+    }
+    for (let i = 0; i < unusedAliasDecls.length; i++) {
+      arb.markNode(unusedAliasDecls[i]);
+    }
+  }
   return arb;
+}
+
+/**
+ * @param {ASTNode} idNode
+ * @param {Set<ASTNode>} replacedCalls
+ * @param {Set<ASTNode>} scaffolding
+ * @return {boolean}
+ */
+function hasRefsOutsideScaffolding(idNode, replacedCalls, scaffolding) {
+  const refs = idNode.references || [];
+  for (let i = 0; i < refs.length; i++) {
+    const ref = refs[i];
+    if (replacedCalls.has(ref.parentNode)) {
+      continue;
+    }
+    let parent = ref;
+    let inside = false;
+    while (parent) {
+      if (scaffolding.has(parent)) {
+        inside = true;
+        break;
+      }
+      parent = parent.parentNode;
+    }
+    if (!inside) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

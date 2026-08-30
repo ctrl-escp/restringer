@@ -23,6 +23,7 @@
  */
 import {unsafe, utils} from '../modules/index.js';
 import {getDescendants} from '../modules/utils/getDescendants.js';
+import flattenStringArrayDecoder from './flattenStringArrayDecoder.js';
 const {resolveFunctionToArray} = unsafe;
 const {createOrderedSrc, evalInVm, getDeclarationWithContext} = utils.default;
 
@@ -224,5 +225,9 @@ export function replaceArrayWithStaticAugmentedVersion(arb) {
   return arb;
 }
 
-export const preprocessors = [replaceArrayWithStaticAugmentedVersion, resolveFunctionToArray.default];
+export const preprocessors = [
+  replaceArrayWithStaticAugmentedVersion,
+  resolveFunctionToArray.default,
+  flattenStringArrayDecoder,
+];
 export const postprocessors = [];

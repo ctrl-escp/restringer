@@ -16,7 +16,6 @@
  * Combined with augmentedArray processors for comprehensive obfuscator.io support.
  */
 import * as augmentedArrayProcessors from './augmentedArray.js';
-import flattenStringArrayDecoder from './flattenStringArrayDecoder.js';
 import inlineOperatorObjects from '../modules/safe/inlineOperatorObjects.js';
 import resolvePureLiteralMethodCalls from '../modules/safe/resolvePureLiteralMethodCalls.js';
 import rearrangeSwitches from '../modules/safe/rearrangeSwitches.js';
@@ -179,12 +178,70 @@ function isFunctionConstructorCallee(callee) {
 }
 
 /**
+ * @param {ASTNode} callee
+ * @return {boolean}
+ */
+function isToStringCallee(callee) {
+  if (!callee || callee.type !== 'MemberExpression') {
+    return false;
+  }
+  const prop = callee.property?.name || callee.property?.value;
+  if (prop === 'toString') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {ASTNode} node
+ * @return {boolean}
+ */
+function isInfiniteWhile(node) {
+  if (node.type !== 'WhileStatement' && node.type !== 'DoWhileStatement') {
+    return false;
+  }
+  const test = node.test;
+  if (!test) {
+    return false;
+  }
+  if (test.type === 'Literal' && (test.value === true || test.value === 1)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {ASTNode} node
+ * @return {ASTNode|null}
+ */
+function findInfiniteWhile(node) {
+  if (!node) {
+    return null;
+  }
+  if (isInfiniteWhile(node)) {
+    return node;
+  }
+  const children = node.body || node.consequent || [];
+  const list = Array.isArray(children) ? children : [children];
+  if (node.type === 'IfStatement' && node.alternate) {
+    list.push(node.alternate);
+  }
+  for (let i = 0; i < list.length; i++) {
+    const found = findInfiniteWhile(list[i]);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
  * Function / .constructor(...) building debugger or while(true){}, and
  * toString() integrity checks that gate an infinite loop.
  *
  * @param {Arborist} arb
  * @param {Function} [candidateFilter]
- * @return {ASTNode[]}
+ * @return {Object[]}
  */
 export function debugProtectionShapeMatch(arb, candidateFilter = () => true) {
   const matches = [];
@@ -192,14 +249,34 @@ export function debugProtectionShapeMatch(arb, candidateFilter = () => true) {
 
   for (let i = 0; i < calls.length; i++) {
     const n = calls[i];
-    if (!candidateFilter(n) || !n.arguments?.length) {
+    if (!candidateFilter(n)) {
       continue;
     }
-    if (isFunctionConstructorCallee(n.callee)) {
+    if (n.arguments?.length && isFunctionConstructorCallee(n.callee)) {
       const src = concatLiteralString(n.arguments[0]);
       if (src !== null && isTrapSourceString(src)) {
-        matches.push(n);
+        matches.push({node: n, kind: 'constructor'});
       }
+      continue;
+    }
+    if (!isToStringCallee(n.callee)) {
+      continue;
+    }
+    let parent = n.parentNode;
+    let ifStmt = null;
+    while (parent) {
+      if (parent.type === 'IfStatement') {
+        ifStmt = parent;
+        break;
+      }
+      parent = parent.parentNode;
+    }
+    if (!ifStmt) {
+      continue;
+    }
+    const hang = findInfiniteWhile(ifStmt.consequent) || findInfiniteWhile(ifStmt.alternate);
+    if (hang) {
+      matches.push({node: hang, kind: 'toStringHang'});
     }
   }
   return matches;
@@ -209,10 +286,15 @@ export function debugProtectionShapeMatch(arb, candidateFilter = () => true) {
  * Replace trap constructors so they are not a live debugger / hang.
  *
  * @param {Arborist} arb
- * @param {ASTNode} n
+ * @param {Object} match
  * @return {Arborist}
  */
-export function debugProtectionShapeTransform(arb, n) {
+export function debugProtectionShapeTransform(arb, match) {
+  const n = match.node || match;
+  if (match.kind === 'toStringHang') {
+    arb.markNode(n);
+    return arb;
+  }
   arb.markNode(n, {
     type: 'FunctionExpression',
     id: null,
@@ -242,7 +324,6 @@ export const preprocessors = [
   freezeUnbeautifiedValues,
   neutralizeDebugProtectionShapes,
   ...augmentedArrayProcessors.preprocessors,
-  flattenStringArrayDecoder,
   inlineOperatorObjects,
   resolvePureLiteralMethodCalls,
   rearrangeSwitches,

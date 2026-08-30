@@ -1914,7 +1914,7 @@ describe('SAFE: resolveProxyCalls', async () => {
   });
   it('TP-6: Remap wrapper with unused params and param minus literal', () => {
     const code = 'function dec(i, k) { return table[i]; } function w(f0, i, k, f1) { return dec(i - 4, k); } w(0, 10, \'x\', 1);';
-    const expected = 'function dec(i, k) {\n  return table[i];\n}\nfunction w(f0, i, k, f1) {\n  return dec(i - 4, k);\n}\ndec(10 - 4, \'x\');';
+    const expected = 'function dec(i, k) {\n  return table[i];\n}\nfunction w(f0, i, k, f1) {\n  return dec(i - 4, k);\n}\ndec(6, \'x\');';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
@@ -2029,6 +2029,12 @@ describe('SAFE: resolveProxyVariables', async () => {
     const code = 'const a2b = atob; console.log(a2b(\'NDI=\'));';
     const expected = 'console.log(atob(\'NDI=\'));';
     const result = applyModuleToCode(code, targetModule, true);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-8: Rewrite decoder alias calls to the original binding', () => {
+    const code = 'function dec(i) { return table[i]; } const w = dec; w(1);';
+    const expected = 'function dec(i) {\n  return table[i];\n}\nconst w = dec;\ndec(1);';
+    const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
   it('TP-2: Remove unused proxy variable declaration', () => {

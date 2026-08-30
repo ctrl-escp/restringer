@@ -304,6 +304,23 @@ describe('Processors tests: Function to Array', async () => {
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
   });
+  it('TP-5: Flatten factory + decoder calls with literal args', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /'world'/);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+  });
 });
 describe('Processors tests: Obfuscator.io', async () => {
   const targetProcessors = (await import('../src/processors/obfuscator.io.js'));
@@ -366,6 +383,150 @@ dec(x);`;
   });
   it('TN-1: Leave ordinary Function constructor calls', () => {
     const code = 'Function(\'return 1\');';
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TP-5: Neutralize toString integrity that gates while(true)', () => {
+    const code = `function fn() { return 1; }
+if (fn.toString() !== 'function fn() { return 1; }') {
+  while (true) {}
+}
+ok();`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /while\s*\(\s*true\s*\)/);
+    assert.match(arb.script, /ok\(\)/);
+  });
+  it('TP-6: Flatten factory after a rotate IIFE on the factory', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+(function (fn) {
+  const a = fn();
+  a.push(a.shift());
+})(f);
+function dec(i) {
+  return f()[i];
+}
+dec(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+    assert.match(arb.script, /'(hello|world)'/);
+  });
+  it('TP-7: Remove unused factory and decoder after flattening', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /function f\(/);
+    assert.doesNotMatch(arb.script, /function dec\(/);
+  });
+  it('TP-8: Sandbox-run a custom decoder body (xor stand-in for RC4)', () => {
+    const code = `function f() {
+  const a = ['idmmn'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i, k) {
+  const s = f()[i];
+  let out = '';
+  for (let j = 0; j < s.length; j++) {
+    out += String.fromCharCode(s.charCodeAt(j) ^ k);
+  }
+  return out;
+}
+dec(0, 1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /dec\(0/);
+  });
+  it('TP-9: Flatten calls through a decoder alias', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+const w = dec;
+w(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /w\(0\)/);
+  });
+  it('TP-10: Inline 5-letter operator object then linearize pipe-split switch', () => {
+    const code = `const sto = {
+  AbCde: function (x, y) { return x + y; },
+  FgHij: 'ok'
+};
+const seq = '0|1'.split('|');
+let i = 0;
+while (true) {
+  switch (seq[i++]) {
+    case '0': sto.AbCde(1, 2); continue;
+    case '1': sto.FgHij; continue;
+  }
+  break;
+}`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /1 \+ 2/);
+    assert.match(arb.script, /'ok'/);
+    assert.doesNotMatch(arb.script, /switch/);
+  });
+  it('TN-3: Leave decoder calls whose arguments are not literals', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(idx);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-5: Keep factory when a non-literal decoder call remains', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(idx);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /function f\(/);
+    assert.match(arb.script, /dec\(idx\)/);
+  });
+  it('TN-4: Do not inline a 5-letter object that is not operator shells', () => {
+    const code = `const user = {
+  AbCde: function () { console.log(1); return 2; }
+};
+user.AbCde();`;
     let arb = new Arborist(code);
     const originalScript = arb.script;
     arb = applyProcessors(arb, targetProcessors);

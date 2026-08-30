@@ -85,6 +85,56 @@ function areArgumentsRemappable(params, callArgs) {
  * @param {ASTNode[]} outerArgs
  * @return {ASTNode|null}
  */
+/**
+ * @param {ASTNode} node
+ * @return {number|undefined}
+ */
+function literalNumber(node) {
+  if (node?.type === 'Literal' && typeof node.value === 'number' && Number.isFinite(node.value)) {
+    return node.value;
+  }
+  if (node?.type === 'UnaryExpression' && node.argument?.type === 'Literal' &&
+		typeof node.argument.value === 'number') {
+    if (node.operator === '-') {
+      return -node.argument.value;
+    }
+    if (node.operator === '+') {
+      return +node.argument.value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * @param {string} operator
+ * @param {ASTNode} left
+ * @param {ASTNode} right
+ * @return {ASTNode|null}
+ */
+function foldRemappedLiteralBinary(operator, left, right) {
+  const lv = literalNumber(left);
+  const rv = literalNumber(right);
+  if (lv === undefined || rv === undefined) {
+    return null;
+  }
+  let value;
+  if (operator === '+') {
+    value = lv + rv;
+  } else if (operator === '-') {
+    value = lv - rv;
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return {
+    type: 'Literal',
+    value,
+    raw: String(value),
+  };
+}
+
 function remapArg(arg, params, outerArgs) {
   if (isLiteralLike(arg)) {
     return arg;
@@ -102,6 +152,10 @@ function remapArg(arg, params, outerArgs) {
     const right = remapArg(arg.right, params, outerArgs);
     if (!left || !right) {
       return null;
+    }
+    const folded = foldRemappedLiteralBinary(arg.operator, left, right);
+    if (folded) {
+      return folded;
     }
     return {
       type: 'BinaryExpression',
