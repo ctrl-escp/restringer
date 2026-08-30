@@ -27,7 +27,12 @@
  */
 import {unsafe} from '../modules/index.js';
 import flattenStringArrayDecoder from './flattenStringArrayDecoder.js';
+import {replaceArrayWithStaticAugmentedVersion} from './augmentedArray.js';
 const {resolveFunctionToArray} = unsafe;
 
-export const preprocessors = [resolveFunctionToArray.default, flattenStringArrayDecoder];
+export const preprocessors = [
+  replaceArrayWithStaticAugmentedVersion,
+  resolveFunctionToArray.default,
+  flattenStringArrayDecoder,
+];
 export const postprocessors = [];

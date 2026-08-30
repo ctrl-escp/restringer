@@ -97,8 +97,8 @@ l[c] = v;`;
     assert.strictEqual(result, expected);
   });
   it('TP-8: Replace augmented function with corrected array', () => {
-    const code = '(function(a, b){const myArr=a();for(let i=0;i<b;i++)myArr.push(myArr.shift());})(arr,1);function arr(){var a1=[2, 1];arr=function(){return a1;};return arr();}const a = arr();console.log(a[0], a[1]);';
-    const expected  = 'function arr() {\n  return [\n    1,\n    2\n  ];\n}\nconst a = [\n  1,\n  2\n];\nconsole.log(1, 2);';
+    const code = '(function(a, b){const myArr=a();for(let i=0;i<b;i++)myArr.push(myArr.shift());})(arr,1);function arr(){var a1=[\'v\', \'w\', \'x\', \'y\', \'z\'];arr=function(){return a1;};return arr();}const a = arr();console.log(a[0], a[1]);';
+    const expected  = 'function arr() {\n  return [\n    \'w\',\n    \'x\',\n    \'y\',\n    \'z\',\n    \'v\'\n  ];\n}\nconst a = [\n  \'w\',\n  \'x\',\n  \'y\',\n  \'z\',\n  \'v\'\n];\nconsole.log(\'w\', \'x\');';
     const result = getDeobfuscatedCode(code);
     assert.strictEqual(result, expected);
   });
