@@ -16,8 +16,13 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [22.x, 24.x, 26.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        include:
+          - node-version: 22.x
+            isolated-vm: 6.2.0
+          - node-version: 24.x
+            isolated-vm: 7.0.1
+          - node-version: 26.x
+            isolated-vm: 7.0.1
 
     steps:
       - uses: actions/checkout@v3
@@ -28,8 +33,7 @@ jobs:
           cache: 'npm'
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y python3 g++ build-essential
-      - run: npm install
-      - name: Use isolated-vm 6.2.0 on Node 22
-        if: matrix.node-version == '22.x'
-        run: npm install --no-save isolated-vm@6.2.0
+      - run: npm install --ignore-scripts
+      - name: Install isolated-vm ${{ matrix.isolated-vm }}
+        run: npm install --no-save isolated-vm@${{ matrix.isolated-vm }}
       - run: npm run test
