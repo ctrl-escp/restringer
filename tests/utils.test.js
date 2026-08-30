@@ -12,6 +12,10 @@ function createExpectedOptions(inputFilename, overrides = {}) {
     verbose: false,
     outputToFile: false,
     maxIterations: false,
+    methods: [],
+    detectObfuscationType: true,
+    maxMarkedNodes: false,
+    safely: false,
     outputFilename: inputFilename ? `${inputFilename}-deob.js` : '-deob.js',
     sandbox: createHostRuntimeSandboxConfig(),
     ...overrides,
@@ -142,5 +146,45 @@ describe('parseArgs tests', () => {
   });
   it('TP-16: Reject unsupported process sandbox alias', () => {
     assert.throws(() => parseArgs(['input.js', '--sandbox=process']), /Unknown sandbox "process"/);
+  });
+  it('TP-17: Repeatable --method preserves order', () => {
+    assert.deepEqual(parseArgs(['input.js', '--method', 'resolveProxyCalls', '--method', 'unwrapIIFEs']), createExpectedOptions('input.js', {
+      methods: ['resolveProxyCalls', 'unwrapIIFEs'],
+    }));
+  });
+  it('TP-18: --method accepts a comma list', () => {
+    assert.deepEqual(parseArgs(['input.js', '-M', 'resolveLocalCalls,unwrapIIFEs']), createExpectedOptions('input.js', {
+      methods: ['resolveLocalCalls', 'unwrapIIFEs'],
+    }));
+  });
+  it('TP-19: --skip-preprocessors', () => {
+    assert.deepEqual(parseArgs(['input.js', '--skip-preprocessors']), createExpectedOptions('input.js', {
+      runPreprocessors: false,
+    }));
+  });
+  it('TP-20: --run-preproc wins over --skip-preprocessors', () => {
+    assert.deepEqual(parseArgs(['input.js', '--skip-preprocessors', '--run-preproc']), createExpectedOptions('input.js', {
+      runPreprocessors: true,
+    }));
+  });
+  it('TP-21: --run-postproc', () => {
+    assert.deepEqual(parseArgs(['input.js', '--run-postproc']), createExpectedOptions('input.js', {
+      runPostprocessors: true,
+    }));
+  });
+  it('TP-22: --no-detect', () => {
+    assert.deepEqual(parseArgs(['input.js', '--no-detect']), createExpectedOptions('input.js', {
+      detectObfuscationType: false,
+    }));
+  });
+  it('TP-23: --max-marked-nodes', () => {
+    assert.deepEqual(parseArgs(['input.js', '--max-marked-nodes', '50']), createExpectedOptions('input.js', {
+      maxMarkedNodes: 50,
+    }));
+  });
+  it('TP-24: --safely', () => {
+    assert.deepEqual(parseArgs(['input.js', '--safely']), createExpectedOptions('input.js', {
+      safely: true,
+    }));
   });
 });

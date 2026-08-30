@@ -1,6 +1,6 @@
 /**
  * Flatten javascript-obfuscator string-array factory + decoder calls.
- * Runs the emitted factory / rotator / decoder in the sandbox — does not reimplement RC4/base64.
+ * Runs the emitted factory / rotator / decoder in the sandbox - does not reimplement RC4/base64.
  */
 import {utils} from '../modules/index.js';
 import {getDescendants} from '../modules/utils/getDescendants.js';

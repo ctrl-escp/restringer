@@ -257,7 +257,7 @@ export const postprocessors = [];
 ### Testing Processors
 
 #### Test Structure
-**NOTE**: Preprocessors and postprocessors must be applied separately—never run preprocessors after postprocessors. Do not combine both arrays in a single `applyIteratively` call, as this would incorrectly apply preprocessors after postprocessors.
+**NOTE**: Preprocessors and postprocessors must be applied separately-never run preprocessors after postprocessors. Do not combine both arrays in a single `applyIteratively` call, as this would incorrectly apply preprocessors after postprocessors.
 
 ```javascript
 import assert from 'node:assert';

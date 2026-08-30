@@ -2,7 +2,7 @@
  * js-confuser product processor.
  *
  * Labels: `js_confuser_string_bank`, `js_confuser_state_machine`.
- * Sandbox-runs the emitted indexer / state loop — does not reimplement the bank cipher.
+ * Sandbox-runs the emitted indexer / state loop - does not reimplement the bank cipher.
  */
 import {utils} from '../modules/index.js';
 import {getDescendants} from '../modules/utils/getDescendants.js';

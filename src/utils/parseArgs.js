@@ -78,6 +78,16 @@ function parsePositiveNumber(value, optionName) {
 }
 
 /**
+ * @param {string} value - One method name or a comma-separated list
+ * @param {string[]} previous - Names collected so far
+ * @return {string[]} Accumulated method names
+ */
+function collectMethods(value, previous) {
+  const names = String(value).split(',').map(name => name.trim()).filter(Boolean);
+  return previous.concat(names);
+}
+
+/**
  * @return {Command} Configured Commander program
  */
 function createProgram() {
@@ -104,7 +114,20 @@ function createProgram() {
         throw new Error('max-iterations must be a positive number');
       }
       return parsed;
-    });
+    })
+    .option('-M, --method <name>', 'Run only these named deobfuscation methods, in order (repeatable, comma-separated)', collectMethods, [])
+    .option('--skip-preprocessors', 'Do not run detected preprocessors')
+    .option('--run-preproc', 'Run detected preprocessors (with --method)')
+    .option('--run-postproc', 'Run detected postprocessors (with --method)')
+    .option('--no-detect', 'Skip obfuscation type detection')
+    .option('--max-marked-nodes <number>', 'Stop each deob method after this many marks', (value) => {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        throw new Error('max-marked-nodes must be a positive number');
+      }
+      return parsed;
+    })
+    .option('--safely', 'Keep valid edits when a queued change would fail the atomic commit');
 
   program.hook('preAction', (thisCommand) => {
     const options = thisCommand.opts();
@@ -135,6 +158,12 @@ export function getHelpText() {
  * @return {boolean} return.verbose - Whether to show debug messages
  * @return {boolean} return.outputToFile - Whether output should be written to file
  * @return {number|boolean|null} return.maxIterations - Maximum iterations (number > 0), false if not set, or null if flag present with invalid value
+ * @return {string[]} return.methods - Named deobfuscation methods in the given order
+ * @return {boolean} return.detectObfuscationType - Whether to detect obfuscation type
+ * @return {boolean} [return.runPreprocessors] - Explicit preprocessor toggle when set
+ * @return {boolean} [return.runPostprocessors] - Explicit postprocessor toggle when set
+ * @return {number|boolean|null} return.maxMarkedNodes - Mark cap, false if unset
+ * @return {boolean} return.safely - Whether to use applyIterativelySafely
  * @return {string} return.outputFilename - Output filename (auto-generated or user-specified)
  * @return {Object} return.sandbox - Sandbox selection and sandbox-specific options
  */
@@ -172,6 +201,9 @@ export function parseArgs(args) {
       if (error.message.includes('max-iterations')) {
         opts.maxIterations = null;
       }
+      if (error.message.includes('max-marked-nodes')) {
+        opts.maxMarkedNodes = null;
+      }
       if (error.message.includes('sb-timeout')) {
         opts.sandbox.options.timeout = null;
       }
@@ -205,6 +237,30 @@ export function parseArgs(args) {
     if (options.maxIterations !== undefined) {
       opts.maxIterations = options.maxIterations;
     }
+
+    if (options.method?.length) {
+      opts.methods = options.method;
+    }
+
+    if (options.skipPreprocessors) {
+      opts.runPreprocessors = false;
+    }
+    if (options.runPreproc) {
+      opts.runPreprocessors = true;
+    }
+    if (options.runPostproc) {
+      opts.runPostprocessors = true;
+    }
+
+    if (options.detect === false) {
+      opts.detectObfuscationType = false;
+    }
+
+    if (options.maxMarkedNodes !== undefined) {
+      opts.maxMarkedNodes = options.maxMarkedNodes;
+    }
+
+    opts.safely = !!options.safely;
 
     if (options.sandbox !== undefined) {
       opts.sandbox = parseSandboxSelection(options.sandbox);
@@ -264,6 +320,10 @@ function createDefaultOptions(inputFilename) {
     verbose: false,
     outputToFile: false,
     maxIterations: false,
+    methods: [],
+    detectObfuscationType: true,
+    maxMarkedNodes: false,
+    safely: false,
     outputFilename: inputFilename ? `${inputFilename}-deob.js` : '-deob.js',
     sandbox: createHostRuntimeSandboxConfig(),
   };

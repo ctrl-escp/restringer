@@ -6,7 +6,7 @@ const FIVE_LETTER_KEY = /^[A-Za-z]{5}$/;
 /**
  * Product-specific javascript-obfuscator identifier shape (CFF storage keys).
  * Used so the generic “every property is a shell” rule does not have to be
- * loosened onto ordinary user objects — same idea as MIN_ARRAY_LENGTH.
+ * loosened onto ordinary user objects - same idea as MIN_ARRAY_LENGTH.
  *
  * @param {string} name
  * @return {boolean}
@@ -117,7 +117,7 @@ function isOperatorObject(objExpr) {
     return false;
   }
   // Generic: every property is a literal or single-return shell (any keys).
-  // Product extra (5-letter CFF keys): same property rule — do not loosen
+  // Product extra (5-letter CFF keys): same property rule - do not loosen
   // this matcher onto arbitrary user objects. isFiveLetterKey documents the emit.
   return everyPropertyIsShellOrLiteral(objExpr);
 }
@@ -128,7 +128,7 @@ function isOperatorObject(objExpr) {
  */
 /**
  * True when the object binding is assigned or updated. Method calls (the call
- * sites we want to inline) are not treated as modifications — `add` is a
+ * sites we want to inline) are not treated as modifications - `add` is a
  * Set mutator name and would otherwise block CFF helper objects.
  *
  * @param {ASTNode[]} refs

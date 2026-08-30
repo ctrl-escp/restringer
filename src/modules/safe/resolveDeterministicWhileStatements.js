@@ -25,7 +25,7 @@ export function resolveDeterministicWhileStatementsMatch(arb, candidateFilter = 
 
 /**
  * Truthy `while`: keep the body (caller / later passes handle infinite loops).
- * Falsy `while`: remove the loop (do-while still ran once — keep the body).
+ * Falsy `while`: remove the loop (do-while still ran once - keep the body).
  *
  * @param {Arborist} arb
  * @param {ASTNode} n

@@ -53,7 +53,7 @@ Processors are **lazily loaded** only when:
 2. Manual processor selection is specified
 3. Custom deobfuscation pipelines are created
 
-Processors run in the same pipeline as the core modules and therefore use the same configured sandbox as **`REstringer`** for any unsafe evaluation the pipeline triggers; see the root [README — Sandbox backends](../../README.md#sandbox-backends).
+Processors run in the same pipeline as the core modules and therefore use the same configured sandbox as **`REstringer`** for any unsafe evaluation the pipeline triggers; see the root [README - Sandbox backends](../../README.md#sandbox-backends).
 
 ### Processor Architecture
 
