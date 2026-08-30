@@ -1,4 +1,4 @@
-import {isLiteralTruthy} from '../utils/literalTruthiness.js';
+import {isLiteralTruthy, isDeterministicTestNode, evaluateDeterministicTest, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Identifies ConditionalExpression nodes with literal test values that can be deterministically resolved.
@@ -13,8 +13,7 @@ export function resolveDeterministicConditionalExpressionsMatch(arb, candidateFi
 
   for (let i = 0; i < relevantNodes.length; i++) {
     const n = relevantNodes[i];
-    // Only resolve conditionals where test is a literal (deterministic)
-    if (n.test.type === 'Literal' && candidateFilter(n)) {
+    if (isDeterministicTestNode(n.test) && candidateFilter(n)) {
       matches.push(n);
     }
   }
@@ -29,7 +28,11 @@ export function resolveDeterministicConditionalExpressionsMatch(arb, candidateFi
  * @return {Arborist} The updated Arborist instance
  */
 export function resolveDeterministicConditionalExpressionsTransform(arb, n) {
-  arb.markNode(n, isLiteralTruthy(n.test.value) ? n.consequent : n.alternate);
+  const testValue = evaluateDeterministicTest(n.test);
+  if (testValue === NOT_RESOLVABLE) {
+    return arb;
+  }
+  arb.markNode(n, isLiteralTruthy(testValue) ? n.consequent : n.alternate);
   return arb;
 }
 

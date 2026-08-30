@@ -48,6 +48,7 @@ export class REstringer {
     this.safeMethods = [
       safe.rearrangeSequences,
       safe.separateChainedDeclarators,
+      safe.inlineOperatorObjects,
       safe.rearrangeSwitches,
       safe.normalizeEmptyStatements,
       safe.removeRedundantBlockStatements,
@@ -59,8 +60,10 @@ export class REstringer {
       safe.resolveMemberExpressionReferencesToArrayIndex,
       safe.resolveMemberExpressionsWithDirectAssignment,
       safe.resolveDefiniteMemberExpressions,
+      safe.resolvePureLiteralMethodCalls,
       safe.parseTemplateLiteralsIntoStringLiterals,
       safe.resolveDeterministicIfStatements,
+      safe.resolveDeterministicWhileStatements,
       safe.resolveDeterministicConditionalExpressions,
       safe.replaceCallExpressionsWithUnwrappedIdentifier,
       safe.replaceEvalCallsWithLiteralContent,

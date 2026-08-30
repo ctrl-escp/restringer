@@ -5,6 +5,9 @@
 
 export const NOT_RESOLVABLE = Symbol('not-resolvable');
 
+/** Comparison operators that are safe to fold when both sides are literal-like. */
+export const COMPARISON_OPERATORS = ['===', '!==', '==', '!=', '<', '>', '<=', '>='];
+
 const ALWAYS_TRUTHY_NODE_TYPES = [
   'ArrayExpression',
   'ObjectExpression',
@@ -336,4 +339,39 @@ function evaluateToStringCall(node) {
   } catch {
     return NOT_RESOLVABLE;
   }
+}
+
+/**
+ * True when a test expression can be folded without eval: a literal, unary-of-literal,
+ * or a comparison (`===` / `!==` / `==` / `!=` / relational) of two resolvable sides.
+ *
+ * @param {ASTNode} node - If / ternary / while test
+ * @return {boolean}
+ */
+export function isDeterministicTestNode(node) {
+  if (!node) {
+    return false;
+  }
+  if (node.type === 'Literal') {
+    return true;
+  }
+  if (node.type === 'UnaryExpression' && node.argument) {
+    return evaluateResolvableValue(node) !== NOT_RESOLVABLE;
+  }
+  if (node.type === 'BinaryExpression' && COMPARISON_OPERATORS.includes(node.operator)) {
+    const left = evaluateResolvableValue(node.left);
+    const right = evaluateResolvableValue(node.right);
+    return left !== NOT_RESOLVABLE && right !== NOT_RESOLVABLE;
+  }
+  return false;
+}
+
+/**
+ * Evaluates a deterministic test to a JS value. Call only after {@link isDeterministicTestNode}.
+ *
+ * @param {ASTNode} node - Test node
+ * @return {*|symbol} Folded value, or NOT_RESOLVABLE
+ */
+export function evaluateDeterministicTest(node) {
+  return evaluateResolvableValue(node);
 }

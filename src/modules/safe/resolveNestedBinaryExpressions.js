@@ -354,6 +354,80 @@ function collectMinusTerms(node) {
  * @param {ASTNode} node - Root `-` expression (children already simplified)
  * @return {ASTNode|null}
  */
+/**
+ * Collects a left-assoc `+` chain into terms (`a + 2 + 3` → [a, 2, 3]).
+ *
+ * @param {ASTNode} node
+ * @return {ASTNode[]}
+ */
+function collectPlusTerms(node) {
+  const terms = [];
+  let current = node;
+  while (current.type === 'BinaryExpression' && current.operator === '+') {
+    terms.unshift(current.right);
+    current = current.left;
+  }
+  terms.unshift(current);
+  return terms;
+}
+
+/**
+ * Merges only **adjacent** literal `+` siblings (`a + 2 + 3` → `a + 5`).
+ * Does not jump an identifier (`2 + a + 3` stays). Two string literals concat.
+ *
+ * @param {ASTNode} node
+ * @return {ASTNode|null}
+ */
+function flattenAdjacentLiteralPlus(node) {
+  const terms = collectPlusTerms(node);
+  if (terms.length < 3) {
+    return null;
+  }
+
+  const merged = [];
+  let changed = false;
+  let i = 0;
+  while (i < terms.length) {
+    const value = getLiteralLikeValue(terms[i]);
+    if (value === NOT_LITERAL) {
+      merged.push(terms[i]);
+      i++;
+      continue;
+    }
+    let acc = value;
+    let j = i + 1;
+    while (j < terms.length) {
+      const next = getLiteralLikeValue(terms[j]);
+      if (next === NOT_LITERAL) {
+        break;
+      }
+      acc = acc + next;
+      changed = true;
+      j++;
+    }
+    if (j === i + 1) {
+      merged.push(terms[i]);
+    } else {
+      const lit = literalNodeFromValue(acc);
+      if (!lit) {
+        return null;
+      }
+      merged.push(lit);
+    }
+    i = j;
+  }
+
+  if (!changed || merged.length === terms.length) {
+    return null;
+  }
+
+  let result = merged[0];
+  for (let k = 1; k < merged.length; k++) {
+    result = createBinary('+', result, merged[k]);
+  }
+  return result;
+}
+
 function flattenPureMinus(node) {
   const {base, subtracted} = collectMinusTerms(node);
   const remaining = [];
@@ -484,6 +558,13 @@ function simplifyNode(node) {
     }
   }
 
+  if (node.operator === '+') {
+    const flattened = flattenAdjacentLiteralPlus(simplified);
+    if (flattened && !nodesEqual(flattened, simplified)) {
+      return flattened;
+    }
+  }
+
   return simplified;
 }
 
@@ -535,7 +616,8 @@ export function resolveNestedBinaryExpressionsTransform(arb, n) {
  * `*` / `/` literals can be regrouped around identifiers (`a * 2 * 3` → `6 * a`)
  * because those operators always coerce with ToNumber/ToBigInt.
  * Pure `-` chains can combine subtracted literals (`a - 2 - 3` → `a - 5`).
- * `+` is never reassociated around unknowns (`a + 2 + 3` stays; `a` may be a string).
+ * Adjacent literal `+` siblings fold (`a + 2 + 3` → `a + 5`); `+` does not
+ * jump an identifier (`2 + a + 3` stays).
  * String results that reconstruct `debugger` are neutralized to `debugge_` via createNewNode.
  *
  * Transforms:

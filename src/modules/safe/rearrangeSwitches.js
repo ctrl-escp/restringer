@@ -3,15 +3,64 @@ import {getDescendants} from '../utils/getDescendants.js';
 const MAX_REPETITION = 50;
 
 /**
+ * @param {ASTNode} node
+ * @return {boolean}
+ */
+function isLiteralArrayExpression(node) {
+  if (!node || node.type !== 'ArrayExpression' || !node.elements?.length) {
+    return false;
+  }
+  for (let i = 0; i < node.elements.length; i++) {
+    const el = node.elements[i];
+    if (!el || el.type !== 'Literal') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Sequence values when the discriminant is `seq[i++]` (or `seq[i]`) and `seq` is
+ * an array of literals. After resolvePureLiteralMethodCalls, `'2|0|1'.split('|')`
+ * is that array.
+ *
+ * @param {ASTNode} discriminant
+ * @return {*[]|null}
+ */
+function getSequencedArrayValues(discriminant) {
+  if (!discriminant || discriminant.type !== 'MemberExpression') {
+    return null;
+  }
+  const obj = discriminant.object;
+  if (obj?.type !== 'Identifier') {
+    return null;
+  }
+  const init = obj.declNode?.parentNode?.init;
+  if (!isLiteralArrayExpression(init)) {
+    return null;
+  }
+  const prop = discriminant.property;
+  const isCursor = prop?.type === 'UpdateExpression' || prop?.type === 'Identifier';
+  if (!isCursor) {
+    return null;
+  }
+  const values = [];
+  for (let i = 0; i < init.elements.length; i++) {
+    values.push(init.elements[i].value);
+  }
+  return values;
+}
+
+/**
  * Find switch statements that can be linearized into sequential code.
  *
- * Identifies switch statements that use a discriminant variable which:
- * - Is an identifier with literal initialization
- * - Has deterministic flow through cases via assignments
+ * Identifies switch statements that use a discriminant which is either:
+ * - An identifier with literal initialization and literal hops, or
+ * - A sequenced array index (`seq[i++]`) whose binding is an array of literals
  *
  * @param {Arborist} arb
  * @param {Function} [candidateFilter] a filter to apply on the candidates list. Defaults to true.
- * @return {ASTNode[]} Array of matching switch statement nodes
+ * @return {Object[]} Matches with `{node, kind, sequenceValues?}`
  */
 export function rearrangeSwitchesMatch(arb, candidateFilter = () => true) {
   const relevantNodes = arb.ast[0].typeMap.SwitchStatement;
@@ -19,32 +68,100 @@ export function rearrangeSwitchesMatch(arb, candidateFilter = () => true) {
 
   for (let i = 0; i < relevantNodes.length; i++) {
     const n = relevantNodes[i];
-    // Check if switch discriminant is an identifier with literal initialization
+    if (!candidateFilter(n)) {
+      continue;
+    }
     if (n.discriminant.type === 'Identifier' &&
-			n?.discriminant.declNode?.parentNode?.init?.type === 'Literal' &&
-			candidateFilter(n)) {
-      matchingNodes.push(n);
+			n?.discriminant.declNode?.parentNode?.init?.type === 'Literal') {
+      matchingNodes.push({node: n, kind: 'literal'});
+      continue;
+    }
+    const sequenceValues = getSequencedArrayValues(n.discriminant);
+    if (sequenceValues) {
+      const cases = n.cases || [];
+      let allLiteralTests = true;
+      for (let j = 0; j < cases.length; j++) {
+        if (cases[j].test && cases[j].test.type !== 'Literal') {
+          allLiteralTests = false;
+          break;
+        }
+      }
+      if (allLiteralTests) {
+        matchingNodes.push({node: n, kind: 'sequence', sequenceValues});
+      }
     }
   }
   return matchingNodes;
 }
 
 /**
- * Transform a switch statement into a sequential block of statements.
- *
- * Algorithm:
- * 1. Start with the initial discriminant value from variable initialization
- * 2. Find the matching case (or default case) for current value
- * 3. Collect all statements from that case (except break statements)
- * 4. Look for assignments to the discriminant variable to find next case
- * 5. Repeat until no more valid transitions found or max iterations reached
- * 6. Replace switch with sequential block of collected statements
+ * @param {ASTNode} stmt
+ * @return {boolean}
+ */
+function isDispatcherJump(stmt) {
+  return stmt.type === 'BreakStatement' || stmt.type === 'ContinueStatement';
+}
+
+/**
+ * @param {ASTNode[]} cases
+ * @param {*} currentVal
+ * @return {ASTNode|undefined}
+ */
+function findMatchingCase(cases, currentVal) {
+  let defaultCase;
+  for (let i = 0; i < cases.length; i++) {
+    if (!cases[i].test) {
+      defaultCase = cases[i];
+      continue;
+    }
+    if (cases[i].test?.value === currentVal) {
+      return cases[i];
+    }
+  }
+  return defaultCase;
+}
+
+/**
+ * Linearize a switch whose discriminant is `seq[i++]` by walking array order.
  *
  * @param {Arborist} arb
- * @param {Object} switchNode - The switch statement node to transform
+ * @param {ASTNode} switchNode
+ * @param {*[]} sequenceValues
  * @return {Arborist}
  */
-export function rearrangeSwitchesTransform(arb, switchNode) {
+function rearrangeSequencedSwitch(arb, switchNode, sequenceValues) {
+  const ordered = [];
+  const cases = switchNode.cases;
+  const limit = Math.min(sequenceValues.length, MAX_REPETITION);
+
+  for (let i = 0; i < limit; i++) {
+    const currentCase = findMatchingCase(cases, sequenceValues[i]);
+    if (!currentCase) {
+      break;
+    }
+    for (let j = 0; j < currentCase.consequent.length; j++) {
+      const stmt = currentCase.consequent[j];
+      if (!isDispatcherJump(stmt)) {
+        ordered.push(stmt);
+      }
+    }
+  }
+
+  if (ordered.length) {
+    arb.markNode(switchNode, {
+      type: 'BlockStatement',
+      body: ordered,
+    });
+  }
+  return arb;
+}
+
+export function rearrangeSwitchesTransform(arb, match) {
+  const switchNode = match.node || match;
+  if (match.kind === 'sequence') {
+    return rearrangeSequencedSwitch(arb, switchNode, match.sequenceValues);
+  }
+
   const ordered = [];
   const cases = switchNode.cases;
   let currentVal = switchNode.discriminant.declNode.parentNode.init.value;

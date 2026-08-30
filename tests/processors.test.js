@@ -208,6 +208,19 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, originalScript);
   });
+  it('TP-7: Rotate IIFE with a parseInt stop condition', () => {
+    const code = `const arr = ['3', '1', '2'];
+(function (a) {
+  while (true) {
+    if (parseInt(a[0]) + parseInt(a[1]) === 4) break;
+    a.push(a.shift());
+  }
+})(arr);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /const arr = \[/);
+    assert.doesNotMatch(arb.script, /parseInt/);
+  });
   it('TN-9: IIFE with complex array manipulation that cannot be resolved', () => {
     const code = `const arr = [1, 2, 3];
 (function(array, shifts) {
@@ -317,5 +330,45 @@ describe('Processors tests: Obfuscator.io', async () => {
     let arb = new Arborist(code);
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
+  });
+  it('TP-3: Neutralize Function constructor debugger trap', () => {
+    const code = 'Function(\'debu\' + \'gger\');';
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /Function\(/);
+    assert.doesNotMatch(arb.script, /debugger/);
+  });
+  it('TP-4: Flatten factory + decoder calls with literal args', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /'world'/);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+  });
+  it('TN-2: Do not flatten a function that returns an array without self-reassign', () => {
+    const code = `function getArr() { return ['a', 'b']; }
+function dec(i) { return getArr()[i]; }
+dec(x);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-1: Leave ordinary Function constructor calls', () => {
+    const code = 'Function(\'return 1\');';
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
   });
 });

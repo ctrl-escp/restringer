@@ -10,13 +10,38 @@ const UNARY_EXPRESSION_TYPES = ['UnaryExpression', 'UpdateExpression'];
  * @param {ASTNode} n - The expression node to check
  * @return {boolean} True if the node is a binary/logical operation in a simple function wrapper
  */
+/**
+ * @param {ASTNode} node
+ * @return {boolean}
+ */
+function isLiteralLikeOperand(node) {
+  if (!node) {
+    return false;
+  }
+  if (node.type === 'Literal') {
+    return true;
+  }
+  return node.type === 'UnaryExpression' && node.argument?.type === 'Literal';
+}
+
+/**
+ * @param {ASTNode} node
+ * @return {boolean}
+ */
+function isParamOperand(node) {
+  return node?.type === 'Identifier' && node.declNode?.parentKey === 'params';
+}
+
 function isBinaryOrLogicalWrapper(n) {
-  return BINARY_EXPRESSION_TYPES.includes(n.type) &&
-		BINARY_OPERATORS.includes(n.operator) &&
-		n.parentNode.type === 'ReturnStatement' &&
-		n.parentNode.parentNode?.body?.length === 1 &&
-		n.left?.declNode?.parentKey === 'params' &&
-		n.right?.declNode?.parentKey === 'params';
+  if (!BINARY_EXPRESSION_TYPES.includes(n.type) ||
+		!BINARY_OPERATORS.includes(n.operator) ||
+		n.parentNode.type !== 'ReturnStatement' ||
+		n.parentNode.parentNode?.body?.length !== 1) {
+    return false;
+  }
+  const leftOk = isParamOperand(n.left) || isLiteralLikeOperand(n.left);
+  const rightOk = isParamOperand(n.right) || isLiteralLikeOperand(n.right);
+  return leftOk && rightOk && (isParamOperand(n.left) || isParamOperand(n.right));
 }
 
 /**
@@ -31,22 +56,6 @@ function isUnaryOrUpdateWrapper(n) {
 		n.parentNode.type === 'ReturnStatement' &&
 		n.parentNode.parentNode?.body?.length === 1 &&
 		n.argument?.declNode?.parentKey === 'params';
-}
-
-/**
- * Creates a binary or logical expression node from the original operation.
- *
- * @param {ASTNode} operationNode - The original binary/logical expression node
- * @param {ASTNode[]} args - The function call arguments to use as operands
- * @return {ASTNode} New binary or logical expression node
- */
-function createBinaryOrLogicalExpression(operationNode, args) {
-  return {
-    type: operationNode.type,
-    operator: operationNode.operator,
-    left: args[0],
-    right: args[1],
-  };
 }
 
 /**
@@ -107,8 +116,30 @@ export function unwrapSimpleOperationsMatch(arb, candidateFilter = () => true) {
  * @param {ASTNode} n - The operation expression node within the function wrapper
  * @return {Arborist} The Arborist instance for chaining
  */
+/**
+ * @param {ASTNode} operand
+ * @param {ASTNode[]} params
+ * @param {ASTNode[]} args
+ * @return {ASTNode|null}
+ */
+function resolveWrapperOperand(operand, params, args) {
+  if (isLiteralLikeOperand(operand)) {
+    return operand;
+  }
+  if (operand?.type === 'Identifier') {
+    for (let i = 0; i < params.length; i++) {
+      if (operand.declNode === params[i] || operand.name === params[i].name) {
+        return args[i] || null;
+      }
+    }
+  }
+  return null;
+}
+
 export function unwrapSimpleOperationsTransform(arb, n) {
-  const references = n.scope.block?.id?.references || [];
+  const funcNode = n.scope.block;
+  const references = funcNode?.id?.references || [];
+  const params = funcNode?.params || [];
 
   for (let i = 0; i < references.length; i++) {
     const ref = references[i];
@@ -117,8 +148,17 @@ export function unwrapSimpleOperationsTransform(arb, n) {
     if (callExpression.type === 'CallExpression') {
       let replacementNode = null;
 
-      if (BINARY_EXPRESSION_TYPES.includes(n.type) && callExpression.arguments.length === 2) {
-        replacementNode = createBinaryOrLogicalExpression(n, callExpression.arguments);
+      if (BINARY_EXPRESSION_TYPES.includes(n.type)) {
+        const left = resolveWrapperOperand(n.left, params, callExpression.arguments || []);
+        const right = resolveWrapperOperand(n.right, params, callExpression.arguments || []);
+        if (left && right) {
+          replacementNode = {
+            type: n.type,
+            operator: n.operator,
+            left,
+            right,
+          };
+        }
       } else if (UNARY_EXPRESSION_TYPES.includes(n.type) && callExpression.arguments.length === 1) {
         replacementNode = createUnaryOrUpdateExpression(n, callExpression.arguments);
       }

@@ -1,3 +1,4 @@
+export const inlineOperatorObjects = await import('./inlineOperatorObjects.js');
 export const normalizeComputed = await import('./normalizeComputed.js');
 export const normalizeEmptyStatements = await import('./normalizeEmptyStatements.js');
 export const normalizeRedundantNotOperator = await import('./normalizeRedundantNotOperator.js');
@@ -18,6 +19,8 @@ export const replaceSequencesWithExpressions = await import('./replaceSequencesW
 export const resolveDefiniteMemberExpressions = await import('./resolveDefiniteMemberExpressions.js');
 export const resolveDeterministicConditionalExpressions = await import('./resolveDeterministicConditionalExpressions.js');
 export const resolveDeterministicIfStatements = await import('./resolveDeterministicIfStatements.js');
+export const resolveDeterministicWhileStatements = await import('./resolveDeterministicWhileStatements.js');
+export const resolvePureLiteralMethodCalls = await import('./resolvePureLiteralMethodCalls.js');
 export const resolveFunctionConstructorCalls = await import('./resolveFunctionConstructorCalls.js');
 export const resolveMemberExpressionReferencesToArrayIndex = await import('./resolveMemberExpressionReferencesToArrayIndex.js');
 export const resolveMemberExpressionsWithDirectAssignment = await import('./resolveMemberExpressionsWithDirectAssignment.js');

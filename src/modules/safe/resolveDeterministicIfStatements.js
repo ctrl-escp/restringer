@@ -1,30 +1,16 @@
-import {isLiteralTruthy, applyUnaryOp, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
+import {isLiteralTruthy, isDeterministicTestNode, evaluateDeterministicTest, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Evaluates a test condition to get its literal value for truthiness testing.
  *
- * Handles both direct literals and unary expressions with literal arguments:
- * - Literal nodes: return the literal value directly
- * - UnaryExpression nodes: evaluate the unary operation and return result
+ * Handles literals, unary-of-literal, and comparisons of two literal-like sides.
  *
- * @param {ASTNode} testNode - The test condition AST node (Literal or UnaryExpression)
+ * @param {ASTNode} testNode - The test condition AST node
  * @return {*} The evaluated literal value
  */
 function evaluateTestValue(testNode) {
-  if (testNode.type === 'Literal') {
-    return testNode.value;
-  }
-
-  if (testNode.type === 'UnaryExpression' && testNode.argument.type === 'Literal') {
-    const argument = testNode.argument.value;
-    const operator = testNode.operator;
-
-    const evaluated = applyUnaryOp(operator, argument);
-    return evaluated === NOT_RESOLVABLE ? argument : evaluated;
-  }
-
-  // Fallback (should not reach here if match function works correctly)
-  return testNode.value;
+  const evaluated = evaluateDeterministicTest(testNode);
+  return evaluated === NOT_RESOLVABLE ? testNode.value : evaluated;
 }
 
 /**
@@ -79,14 +65,7 @@ export function resolveDeterministicIfStatementsMatch(arb, candidateFilter = () 
       continue;
     }
 
-    // Check if test condition is a literal
-    if (n.test.type === 'Literal') {
-      matches.push(n);
-    }
-    // Check if test condition is a unary expression with literal argument (e.g., -1, +5)
-    else if (n.test.type === 'UnaryExpression' &&
-				 n.test.argument &&
-				 n.test.argument.type === 'Literal') {
+    if (isDeterministicTestNode(n.test)) {
       matches.push(n);
     }
   }

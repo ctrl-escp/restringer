@@ -22,8 +22,51 @@
  * 4. Remove the augmenting IIFE as it's no longer needed
  */
 import {unsafe, utils} from '../modules/index.js';
+import {getDescendants} from '../modules/utils/getDescendants.js';
 const {resolveFunctionToArray} = unsafe;
 const {createOrderedSrc, evalInVm, getDeclarationWithContext} = utils.default;
+
+const ARRAY_MUTATORS = new Set(['push', 'shift', 'unshift', 'pop']);
+
+/**
+ * @param {ASTNode} callee
+ * @return {boolean}
+ */
+function iifeMutatesArrayArg(callee) {
+  const params = callee.params || [];
+  if (!params.length || params[0].type !== 'Identifier') {
+    return false;
+  }
+  const paramName = params[0].name;
+  const descendants = getDescendants(callee.body || callee);
+  let mutates = false;
+  let hasParseInt = false;
+  for (let i = 0; i < descendants.length; i++) {
+    const node = descendants[i];
+    if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && node.callee.name === 'parseInt') {
+      hasParseInt = true;
+    }
+    if (node.type === 'CallExpression' && node.callee?.type === 'MemberExpression') {
+      const obj = node.callee.object;
+      const prop = node.callee.property;
+      const method = prop?.name || prop?.value;
+      if (obj?.type === 'Identifier' && obj.name === paramName && ARRAY_MUTATORS.has(method)) {
+        mutates = true;
+      }
+    }
+  }
+  return mutates && hasParseInt;
+}
+
+/**
+ * @param {ASTNode} n - CallExpression
+ * @return {boolean}
+ */
+function isLiteralCountShuffle(n) {
+  return n.arguments.length > 1 &&
+		n.arguments[1].type === 'Literal' &&
+		!Number.isNaN(parseInt(n.arguments[1].value));
+}
 
 // Function declaration type pattern for detecting array source context
 const FUNCTION_DECLARATION_PATTERN = /function/i;
@@ -58,10 +101,9 @@ export function augmentedArrayMatch(arb, candidateFilter = () => true) {
   for (let i = 0; i < candidates.length; i++) {
     const n = candidates[i];
     if ((n.callee.type === 'FunctionExpression' || n.callee.type === 'ArrowFunctionExpression') &&
-			n.arguments.length > 1 &&
+			n.arguments.length >= 1 &&
 			n.arguments[0].type === 'Identifier' &&
-			n.arguments[1].type === 'Literal' &&
-			!Number.isNaN(parseInt(n.arguments[1].value)) &&
+			(isLiteralCountShuffle(n) || iifeMutatesArrayArg(n.callee)) &&
 			candidateFilter(n)) {
       // For function declarations, only match if they are self-modifying
       if (n.arguments[0].declNode?.parentNode?.type === 'FunctionDeclaration') {
