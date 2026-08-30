@@ -11,6 +11,12 @@ import {getDescendants} from '../utils/getDescendants.js';
 const VALID_UNWRAP_TYPES = ['Literal', 'Identifier'];
 const SAFE_SELF_MUTATING_REPLACEMENT_TYPES = ['Literal', 'Identifier', 'UnaryExpression'];
 const CACHE_LIMIT = 100;
+// Matches the obfuscator.io debug-guard `/^([^ ]+( +[^ ]+)+)+[^ ]}/` in
+// function source. `.test(fn)` stringifies the function and the regex
+// backtracks until the sandbox 1s timeout. Skipping the callee is required:
+// neutralizing the regex lets the guard return a boolean and fold
+// `_yh()` → `true`, which changes sample output.
+const REDOS_DEBUG_GUARD = /\^\(\[\^ \]\+\( \+\[\^ \]\+\)\+\)\+/;
 
 // Module-level variables for appearance tracking
 let APPEARANCES = new Map();
@@ -156,13 +162,27 @@ export function resolveLocalCallsTransform(arb, matches) {
       // Skip if already modified in this iteration
       if (isNodeInRanges(c, modifiedRanges)) continue;
 
-      // Skip if any argument has problematic type
+      // Skip environment-bound calls. Check `c.arguments` (the CallExpression),
+      // not `callee.arguments` - an Identifier callee has none. Compare
+      // `arg.name`, not the node: `SKIP_IDENTIFIERS.includes(arg)` is always
+      // false. After BOM stubs made `window` an object, missing this skip
+      // evaluated `_0x18585b(window, 'setTimeout', …)` and hit the ReDoS
+      // guard below (~1s timeout each).
       for (let j = 0; j < c.arguments.length; j++) {
-        if (c.arguments[j].type === 'ThisExpression') continue candidateLoop;
+        const arg = c.arguments[j];
+        if (arg.type === 'ThisExpression') continue candidateLoop;
+        if (SKIP_IDENTIFIERS.includes(arg.name || arg.value)) continue candidateLoop;
       }
 
       const callee = c.callee?.object || c.callee;
       const declNode = resolveCalleeDeclaration(arb, callee);
+      // Skip before touching the cache. A skip that only ran on cache-miss
+      // stored BAD_VALUE and later calls to the same callee still eval'd.
+      if (SKIP_IDENTIFIERS.includes(callee.name) ||
+				(callee.type === 'ArrayExpression' && !callee.elements.length) ||
+				REDOS_DEBUG_GUARD.test(declNode?.parentNode?.src || declNode?.src || '')) {
+        continue;
+      }
 
       // Skip simple wrappers that should be handled by safe modules
       if (declNode?.parentNode?.body?.body?.[0]?.type === 'ReturnStatement') {
@@ -179,11 +199,6 @@ export function resolveLocalCallsTransform(arb, matches) {
       const cacheName = `rlc-${callee.name || callee.value}-${declNode?.nodeId}`;
       if (!cache[cacheName]) {
         cache[cacheName] = evalInVm.BAD_VALUE;
-
-        // Skip problematic callee types that shouldn't be evaluated
-        if (SKIP_IDENTIFIERS.includes(callee.name) ||
-				(callee.type === 'ArrayExpression' && !callee.elements.length) ||
-				(callee.arguments || []).some(arg => SKIP_IDENTIFIERS.includes(arg) || arg?.type === 'ThisExpression')) continue;
 
         if (declNode) {
           // Skip simple function wrappers (handled by safe modules)

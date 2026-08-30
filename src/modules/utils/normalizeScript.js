@@ -1,7 +1,7 @@
-import {applyIteratively} from 'flast';
+import {applyIteratively, applyIterativelySafely} from 'flast';
 import * as normalizeComputed from '../safe/normalizeComputed.js';
 import * as normalizeEmptyStatements from '../safe/normalizeEmptyStatements.js';
-import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotOperator.js';
+import * as normalizeRedundantNotOperator from '../safe/normalizeRedundantNotOperator.js';
 
 /**
  * Normalizes JavaScript code to improve readability without affecting functionality.
@@ -18,16 +18,26 @@ import * as normalizeRedundantNotOperator from '../unsafe/normalizeRedundantNotO
  * changes occur, handling cases where one transformation enables another.
  *
  * @param {string} script - JavaScript source code to normalize
+ * @param {Object} [options] Iteration state from an in-progress deobfuscate() so this pass continues the same log sequence and hard cap. The mark cap is not forwarded; normalize is not a deob slice.
+ * @param {number} [options.currentIteration]
+ * @param {number} [options.maxIterations]
+ * @param {boolean} [options.safely] Use applyIterativelySafely and return its `.script`
  * @return {string} The normalized script with improved readability
  *
  * @example
  * // Input: obj['method'](); !!true; ;;;
  * // Output: obj.method(); true;
  */
-export function normalizeScript(script) {
-  return applyIteratively(script, [
+export function normalizeScript(script, options = {}) {
+  const methods = [
     normalizeComputed.default,
     normalizeRedundantNotOperator.default,
     normalizeEmptyStatements.default,
-  ]);
+  ];
+  const applyOptions = {};
+  if (options.currentIteration !== undefined) applyOptions.currentIteration = options.currentIteration;
+  if (options.maxIterations !== undefined) applyOptions.maxIterations = options.maxIterations;
+  const apply = options.safely ? applyIterativelySafely : applyIteratively;
+  const result = Object.keys(applyOptions).length ? apply(script, methods, applyOptions) : apply(script, methods);
+  return options.safely ? result.script : result;
 }

@@ -1,37 +1,7 @@
+import {isNodeTruthy} from '../utils/literalTruthiness.js';
+
 // Static arrays to avoid recreation overhead
 const LOGICAL_OPERATORS = ['&&', '||'];
-const TRUTHY_NODE_TYPES = ['ArrayExpression', 'ObjectExpression', 'FunctionExpression', 'ArrowFunctionExpression'];
-
-/**
- * Evaluates the truthiness of an AST node according to JavaScript rules.
- *
- * In JavaScript, these are always truthy:
- * - Arrays (even empty: [])
- * - Objects (even empty: {})
- * - Functions
- * - Regular expressions
- *
- * For literals, these values are falsy: false, 0, -0, 0n, "", null, undefined, NaN
- * All other literal values are truthy.
- *
- * @param {ASTNode} node - The AST node to evaluate
- * @return {boolean|null} True if truthy, false if falsy, null if indeterminate
- */
-function isNodeTruthy(node) {
-  // Arrays, objects, functions, and regex are always truthy
-  if (TRUTHY_NODE_TYPES.includes(node.type) || (node.type === 'Literal' && node.regex)) {
-    return true;
-  }
-
-  // For literal values, evaluate using JavaScript truthiness rules
-  if (node.type === 'Literal') {
-    // JavaScript falsy values: false, 0, -0, 0n, "", null, undefined, NaN
-    return Boolean(node.value);
-  }
-
-  // For other node types, we can't determine truthiness statically
-  return null;
-}
 
 /**
  * Determines the replacement node for a redundant logical expression.

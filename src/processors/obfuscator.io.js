@@ -16,9 +16,13 @@
  * Combined with augmentedArray processors for comprehensive obfuscator.io support.
  */
 import * as augmentedArrayProcessors from './augmentedArray.js';
+import inlineOperatorObjects from '../modules/safe/inlineOperatorObjects.js';
+import resolvePureLiteralMethodCalls from '../modules/safe/resolvePureLiteralMethodCalls.js';
+import rearrangeSwitches from '../modules/safe/rearrangeSwitches.js';
 
 // String literal values that trigger debug protection mechanisms
 const DEBUG_PROTECTION_TRIGGERS = ['newState', 'removeCookie'];
+const TRAP_FUNCTION_BODIES = new Set(['debugger', 'while(true){}', 'while(true);']);
 
 // Replacement string that bypasses obfuscator.io debug protection
 const FREEZE_REPLACEMENT_STRING = 'function () {return "bypassed!"}';
@@ -120,5 +124,208 @@ function freezeUnbeautifiedValues(arb, candidateFilter = () => true) {
   return arb;
 }
 
-export const preprocessors = [freezeUnbeautifiedValues, ...augmentedArrayProcessors.preprocessors];
+/**
+ * Concatenate a + chain of string literals.
+ *
+ * @param {ASTNode} node
+ * @return {string|null}
+ */
+function concatLiteralString(node) {
+  if (!node) {
+    return null;
+  }
+  if (node.type === 'Literal' && typeof node.value === 'string') {
+    return node.value;
+  }
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
+    const left = concatLiteralString(node.left);
+    const right = concatLiteralString(node.right);
+    if (left !== null && right !== null) {
+      return left + right;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} value
+ * @return {boolean}
+ */
+function isTrapSourceString(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const compact = value.replace(/\s+/g, '');
+  return TRAP_FUNCTION_BODIES.has(compact) || value === 'debugger';
+}
+
+/**
+ * @param {ASTNode} callee
+ * @return {boolean}
+ */
+function isFunctionConstructorCallee(callee) {
+  if (!callee) {
+    return false;
+  }
+  if (callee.type === 'Identifier' && callee.name === 'Function') {
+    return true;
+  }
+  if (callee.type === 'MemberExpression') {
+    const prop = callee.property?.name || callee.property?.value;
+    return prop === 'constructor';
+  }
+  return false;
+}
+
+/**
+ * @param {ASTNode} callee
+ * @return {boolean}
+ */
+function isToStringCallee(callee) {
+  if (!callee || callee.type !== 'MemberExpression') {
+    return false;
+  }
+  const prop = callee.property?.name || callee.property?.value;
+  if (prop === 'toString') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {ASTNode} node
+ * @return {boolean}
+ */
+function isInfiniteWhile(node) {
+  if (node.type !== 'WhileStatement' && node.type !== 'DoWhileStatement') {
+    return false;
+  }
+  const test = node.test;
+  if (!test) {
+    return false;
+  }
+  if (test.type === 'Literal' && (test.value === true || test.value === 1)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {ASTNode} node
+ * @return {ASTNode|null}
+ */
+function findInfiniteWhile(node) {
+  if (!node) {
+    return null;
+  }
+  if (isInfiniteWhile(node)) {
+    return node;
+  }
+  const children = node.body || node.consequent || [];
+  const list = Array.isArray(children) ? children : [children];
+  if (node.type === 'IfStatement' && node.alternate) {
+    list.push(node.alternate);
+  }
+  for (let i = 0; i < list.length; i++) {
+    const found = findInfiniteWhile(list[i]);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Function / .constructor(...) building debugger or while(true){}, and
+ * toString() integrity checks that gate an infinite loop.
+ *
+ * @param {Arborist} arb
+ * @param {Function} [candidateFilter]
+ * @return {Object[]}
+ */
+export function debugProtectionShapeMatch(arb, candidateFilter = () => true) {
+  const matches = [];
+  const calls = arb.ast[0].typeMap.CallExpression || [];
+
+  for (let i = 0; i < calls.length; i++) {
+    const n = calls[i];
+    if (!candidateFilter(n)) {
+      continue;
+    }
+    if (n.arguments?.length && isFunctionConstructorCallee(n.callee)) {
+      const src = concatLiteralString(n.arguments[0]);
+      if (src !== null && isTrapSourceString(src)) {
+        matches.push({node: n, kind: 'constructor'});
+      }
+      continue;
+    }
+    if (!isToStringCallee(n.callee)) {
+      continue;
+    }
+    let parent = n.parentNode;
+    let ifStmt = null;
+    while (parent) {
+      if (parent.type === 'IfStatement') {
+        ifStmt = parent;
+        break;
+      }
+      parent = parent.parentNode;
+    }
+    if (!ifStmt) {
+      continue;
+    }
+    const hang = findInfiniteWhile(ifStmt.consequent) || findInfiniteWhile(ifStmt.alternate);
+    if (hang) {
+      matches.push({node: hang, kind: 'toStringHang'});
+    }
+  }
+  return matches;
+}
+
+/**
+ * Replace trap constructors so they are not a live debugger / hang.
+ *
+ * @param {Arborist} arb
+ * @param {Object} match
+ * @return {Arborist}
+ */
+export function debugProtectionShapeTransform(arb, match) {
+  const n = match.node || match;
+  if (match.kind === 'toStringHang') {
+    arb.markNode(n);
+    return arb;
+  }
+  arb.markNode(n, {
+    type: 'FunctionExpression',
+    id: null,
+    params: [],
+    body: {
+      type: 'BlockStatement',
+      body: [],
+    },
+  });
+  return arb;
+}
+
+/**
+ * @param {Arborist} arb
+ * @param {Function} [candidateFilter]
+ * @return {Arborist}
+ */
+function neutralizeDebugProtectionShapes(arb, candidateFilter = () => true) {
+  const matches = debugProtectionShapeMatch(arb, candidateFilter);
+  for (let i = 0; i < matches.length; i++) {
+    arb = debugProtectionShapeTransform(arb, matches[i]);
+  }
+  return arb;
+}
+
+export const preprocessors = [
+  freezeUnbeautifiedValues,
+  neutralizeDebugProtectionShapes,
+  ...augmentedArrayProcessors.preprocessors,
+  inlineOperatorObjects,
+  resolvePureLiteralMethodCalls,
+  rearrangeSwitches,
+];
 export const postprocessors = [...augmentedArrayProcessors.postprocessors];

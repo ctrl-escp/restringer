@@ -1,5 +1,18 @@
+import {hideBlockedApis} from '../constants.js';
+
+// Capture IPC handles before hideBlockedApis() wipes `Deno`. After that,
+// `Deno.stdout` / `Deno.stdin` are gone.
+const stdoutWrite = Deno.stdout.writeSync.bind(Deno.stdout);
+const textEncoder = new TextEncoder();
+const stdinReadable = Deno.stdin.readable;
+delete Math.random;
+// `delete Date` is a SyntaxError in module strict mode. Date lives on the
+// global, so delete that binding instead.
+delete globalThis.Date;
+hideBlockedApis();
+
 function send(message) {
-  Deno.stdout.writeSync(new TextEncoder().encode(JSON.stringify(message) + '\n'));
+  stdoutWrite(textEncoder.encode(JSON.stringify(message) + '\n'));
 }
 
 function serialize(value, seen = new WeakSet()) {
@@ -46,18 +59,7 @@ function createRequestSource(history, code, mode) {
   const finalSource = mode === 'exec'
     ? code + '\nconst __restringerResult = undefined;'
     : 'const __restringerResult = eval(' + JSON.stringify(code) + ');';
-  return [
-    'delete Math.random;',
-    'delete Date;',
-    'globalThis.fetch = undefined;',
-    'globalThis.XMLHttpRequest = undefined;',
-    'globalThis.WebSocket = undefined;',
-    'globalThis.WebAssembly = undefined;',
-    'globalThis.navigator = undefined;',
-    'globalThis.Navigator = undefined;',
-    historySource,
-    finalSource,
-  ].join('\n');
+  return [historySource, finalSource].join('\n');
 }
 
 function formatError(error) {
@@ -67,6 +69,8 @@ function formatError(error) {
 function handleRequest(request) {
   try {
     const source = createRequestSource(request.history || [], request.code, request.mode);
+    // Indirect eval: run guest+history as global script, not in this module
+    // scope. See hideBlockedApis() in constants.js.
     const value = (0, eval)(source + '\n__restringerResult;');
     send({type: 'response', requestId: request.requestId, ok: true, value: serialize(value)});
   } catch (error) {
@@ -81,7 +85,7 @@ function handleRequest(request) {
 
 async function main() {
   send({type: 'ready'});
-  const reader = Deno.stdin.readable
+  const reader = stdinReadable
     .pipeThrough(new TextDecoderStream())
     .getReader();
   let buffer = '';

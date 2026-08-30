@@ -1,64 +1,16 @@
-/**
- * Determines whether a literal value is truthy in JavaScript context.
- *
- * This helper evaluates literal values according to JavaScript truthiness rules:
- * - false, 0, -0, 0n, "", null, undefined, NaN are falsy
- * - All other values are truthy
- *
- * @param {*} value - The literal value to evaluate
- * @return {boolean} Whether the value is truthy
- */
-function isLiteralTruthy(value) {
-  // Handle special JavaScript falsy values
-  if (value === false || value === 0 || value === -0 || value === 0n ||
-		value === '' || value === null || value === undefined) {
-    return false;
-  }
-
-  // Handle NaN (NaN !== NaN is true)
-  if (typeof value === 'number' && value !== value) {
-    return false;
-  }
-
-  return true;
-}
+import {isLiteralTruthy, isDeterministicTestNode, evaluateDeterministicTest, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Evaluates a test condition to get its literal value for truthiness testing.
  *
- * Handles both direct literals and unary expressions with literal arguments:
- * - Literal nodes: return the literal value directly
- * - UnaryExpression nodes: evaluate the unary operation and return result
+ * Handles literals, unary-of-literal, and comparisons of two literal-like sides.
  *
- * @param {ASTNode} testNode - The test condition AST node (Literal or UnaryExpression)
+ * @param {ASTNode} testNode - The test condition AST node
  * @return {*} The evaluated literal value
  */
 function evaluateTestValue(testNode) {
-  if (testNode.type === 'Literal') {
-    return testNode.value;
-  }
-
-  if (testNode.type === 'UnaryExpression' && testNode.argument.type === 'Literal') {
-    const argument = testNode.argument.value;
-    const operator = testNode.operator;
-
-    switch (operator) {
-      case '-':
-        return -argument;
-      case '+':
-        return +argument;
-      case '!':
-        return !argument;
-      case '~':
-        return ~argument;
-      default:
-        // For any other unary operators, return the original argument
-        return argument;
-    }
-  }
-
-  // Fallback (should not reach here if match function works correctly)
-  return testNode.value;
+  const evaluated = evaluateDeterministicTest(testNode);
+  return evaluated === NOT_RESOLVABLE ? testNode.value : evaluated;
 }
 
 /**
@@ -113,14 +65,7 @@ export function resolveDeterministicIfStatementsMatch(arb, candidateFilter = () 
       continue;
     }
 
-    // Check if test condition is a literal
-    if (n.test.type === 'Literal') {
-      matches.push(n);
-    }
-    // Check if test condition is a unary expression with literal argument (e.g., -1, +5)
-    else if (n.test.type === 'UnaryExpression' &&
-				 n.test.argument &&
-				 n.test.argument.type === 'Literal') {
+    if (isDeterministicTestNode(n.test)) {
       matches.push(n);
     }
   }

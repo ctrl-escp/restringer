@@ -1,6 +1,7 @@
 import {getCache} from '../utils/getCache.js';
 import {generateFlatAST, logger} from 'flast';
 import {generateHash} from '../utils/generateHash.js';
+import {neutralizeInjectedNode} from '../utils/neutralizeTraps.js';
 
 /**
  * Parse the string argument of an eval call into an AST node.
@@ -17,10 +18,10 @@ function parseEvalArgument(code) {
 
   // Multiple statements become a block statement
   if (body.length > 1) {
-    return {
+    return neutralizeInjectedNode({
       type: 'BlockStatement',
       body,
-    };
+    });
   }
 
   // Single statement processing
@@ -31,7 +32,7 @@ function parseEvalArgument(code) {
     body = body.expression;
   }
 
-  return body;
+  return neutralizeInjectedNode(body);
 }
 
 /**

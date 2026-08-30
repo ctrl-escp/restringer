@@ -1,5 +1,6 @@
-import {Sandbox} from '../utils/sandbox.js';
-import {evalInVm} from '../utils/evalInVm.js';
+import {createNewNode} from '../utils/createNewNode.js';
+import {BAD_VALUE} from '../config.js';
+import {evaluateResolvableValue, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 const RESOLVABLE_ARGUMENT_TYPES = ['Literal', 'ArrayExpression', 'ObjectExpression', 'Identifier', 'TemplateLiteral', 'UnaryExpression'];
 
@@ -76,21 +77,22 @@ export function normalizeRedundantNotOperatorMatch(arb, candidateFilter = () => 
 }
 
 /**
- * Transforms a redundant NOT operator by evaluating it to its boolean result.
+ * Transforms a redundant NOT operator by folding it to its boolean result.
  *
- * Evaluates the NOT expression in a sandbox environment and replaces it with
- * the computed boolean literal. This normalizes expressions like `!true` to `false`,
- * `!0` to `true`, `![]` to `false`, etc.
+ * Replaces expressions like `!true` with `false`, `!0` with `true`, `![]` with `false`.
  *
  * @param {Arborist} arb - The Arborist instance to mark nodes for transformation
  * @param {ASTNode} n - The UnaryExpression node with redundant NOT operator
- * @param {Sandbox} sharedSandbox - Shared sandbox instance for evaluation
  * @return {Arborist} The Arborist instance for chaining
  */
-export function normalizeRedundantNotOperatorTransform(arb, n, sharedSandbox) {
-  const replacementNode = evalInVm(n.src, sharedSandbox);
+export function normalizeRedundantNotOperatorTransform(arb, n) {
+  const value = evaluateResolvableValue(n);
+  if (value === NOT_RESOLVABLE) {
+    return arb;
+  }
 
-  if (replacementNode !== evalInVm.BAD_VALUE) {
+  const replacementNode = createNewNode(value);
+  if (replacementNode !== BAD_VALUE) {
     arb.markNode(n, replacementNode);
   }
 
@@ -103,9 +105,6 @@ export function normalizeRedundantNotOperatorTransform(arb, n, sharedSandbox) {
  * This optimization evaluates NOT expressions that can be safely computed at
  * transformation time, replacing them with boolean literals. This includes
  * expressions like `!true`, `!0`, `![]`, `!{}`, etc.
- *
- * The evaluation is performed in a secure sandbox environment to prevent
- * code execution side effects.
  *
  * Transforms:
  * ```javascript
@@ -124,15 +123,8 @@ export function normalizeRedundantNotOperatorTransform(arb, n, sharedSandbox) {
 export default function normalizeRedundantNotOperator(arb, candidateFilter = () => true) {
   const matches = normalizeRedundantNotOperatorMatch(arb, candidateFilter);
 
-  if (matches.length) {
-    const sharedSandbox = new Sandbox();
-    try {
-      for (let i = 0; i < matches.length; i++) {
-        arb = normalizeRedundantNotOperatorTransform(arb, matches[i], sharedSandbox);
-      }
-    } finally {
-      sharedSandbox.close();
-    }
+  for (let i = 0; i < matches.length; i++) {
+    arb = normalizeRedundantNotOperatorTransform(arb, matches[i]);
   }
   return arb;
 }

@@ -26,7 +26,13 @@
  * which provides sophisticated match/transform logic with context-aware evaluation.
  */
 import {unsafe} from '../modules/index.js';
+import flattenStringArrayDecoder from './flattenStringArrayDecoder.js';
+import {replaceArrayWithStaticAugmentedVersion} from './augmentedArray.js';
 const {resolveFunctionToArray} = unsafe;
 
-export const preprocessors = [resolveFunctionToArray.default];
+export const preprocessors = [
+  replaceArrayWithStaticAugmentedVersion,
+  resolveFunctionToArray.default,
+  flattenStringArrayDecoder,
+];
 export const postprocessors = [];

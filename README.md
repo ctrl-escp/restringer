@@ -84,8 +84,10 @@ npm install
 ### Command-Line Usage
 
 ```
-Usage: restringer input_filename [-h] [-c] [-q | -v] [-m M] [-o [output_filename]]
+Usage: restringer input_filename [-h] [-c] [-q | -v] [-m M] [-M name] [-o [output_filename]]
                   [--sandbox <name>] [--sb-exec <path>] [--sb-timeout <ms>] [--sb-memory-limit <mb>]
+                  [--skip-preprocessors] [--run-preproc] [--run-postproc] [--no-detect]
+                  [--max-marked-nodes N] [--safely]
 
 positional arguments:
   input_filename                  The obfuscated JavaScript file
@@ -97,11 +99,18 @@ optional arguments:
   -q, --quiet                     Suppress output to stdout
   -v, --verbose                   Show debug messages during deobfuscation
   -m, --max-iterations M          Maximum deobfuscation iterations (must be > 0)
+  -M, --method <name>             Run only these named methods, in order (repeatable, comma-separated)
   -o, --output [filename]         Write output to file (default: <input>-deob.js)
   --sandbox <name>                Sandbox to use: isolated-vm, node, deno, or bun (default: current runtime)
   --sb-exec <path>                Path to the sandbox runtime executable
   --sb-timeout <ms>               Sandbox execution timeout in milliseconds (default: 1000)
   --sb-memory-limit <mb>          isolated-vm memory limit in MB (default: 128)
+  --skip-preprocessors            Do not run detected preprocessors
+  --run-preproc                   Run detected preprocessors when --method is set
+  --run-postproc                  Run detected postprocessors when --method is set
+  --no-detect                     Skip obfuscation type detection
+  --max-marked-nodes N            Stop each deob method after this many marks
+  --safely                        Keep valid edits when one queued change would fail
 ```
 
 #### Examples
@@ -134,6 +143,14 @@ restringer obfuscated.js --sandbox=deno
 restringer obfuscated.js --sandbox=node --sb-exec=/opt/node-v22/bin/node
 restringer obfuscated.js --sandbox=deno --sb-timeout=400
 restringer obfuscated.js --sandbox=isolated-vm --sb-memory-limit=64
+```
+
+Named methods (skips preprocessors and postprocessors unless `--run-preproc` / `--run-postproc`):
+
+```bash
+restringer obfuscated.js --method resolveProxyCalls --method unwrapIIFEs
+restringer obfuscated.js -M resolveLocalCalls,unwrapIIFEs -m 5
+restringer obfuscated.js --method resolveLocalCalls --run-preproc --safely
 ```
 
 ### Sandbox backends
@@ -232,14 +249,14 @@ import {safe, unsafe} from 'restringer';
 // Import specific modules
 const normalizeComputed = safe.normalizeComputed.default;
 const removeRedundantBlockStatements = safe.removeRedundantBlockStatements.default;
-const resolveDefiniteBinaryExpressions = unsafe.resolveDefiniteBinaryExpressions.default;
+const resolveNestedBinaryExpressions = safe.resolveNestedBinaryExpressions.default;
 const resolveLocalCalls = unsafe.resolveLocalCalls.default;
 
 let script = 'your obfuscated code here';
 
 // Define custom deobfuscation pipeline
 const customModules = [
-  resolveDefiniteBinaryExpressions,  // Resolve literal math operations
+  resolveNestedBinaryExpressions,    // Fold literal math without eval
   resolveLocalCalls,                 // Inline function calls
   normalizeComputed,                 // Convert obj['prop'] to obj.prop
   removeRedundantBlockStatements,    // Clean up unnecessary blocks

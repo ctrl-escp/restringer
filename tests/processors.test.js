@@ -208,6 +208,19 @@ shuffle(arr, 2);`;
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, originalScript);
   });
+  it('TP-7: Rotate IIFE with a parseInt stop condition', () => {
+    const code = `const arr = ['3', '1', '2'];
+(function (a) {
+  while (true) {
+    if (parseInt(a[0]) + parseInt(a[1]) === 4) break;
+    a.push(a.shift());
+  }
+})(arr);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /const arr = \[/);
+    assert.doesNotMatch(arb.script, /parseInt/);
+  });
   it('TN-9: IIFE with complex array manipulation that cannot be resolved', () => {
     const code = `const arr = [1, 2, 3];
 (function(array, shifts) {
@@ -291,6 +304,23 @@ describe('Processors tests: Function to Array', async () => {
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
   });
+  it('TP-5: Flatten factory + decoder calls with literal args', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /'world'/);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+  });
 });
 describe('Processors tests: Obfuscator.io', async () => {
   const targetProcessors = (await import('../src/processors/obfuscator.io.js'));
@@ -317,5 +347,308 @@ describe('Processors tests: Obfuscator.io', async () => {
     let arb = new Arborist(code);
     arb = applyProcessors(arb, targetProcessors);
     assert.strictEqual(arb.script, expected);
+  });
+  it('TP-3: Neutralize Function constructor debugger trap', () => {
+    const code = 'Function(\'debu\' + \'gger\');';
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /Function\(/);
+    assert.doesNotMatch(arb.script, /debugger/);
+  });
+  it('TP-4: Flatten factory + decoder calls with literal args', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /'world'/);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+  });
+  it('TN-2: Do not flatten a function that returns an array without self-reassign', () => {
+    const code = `function getArr() { return ['a', 'b']; }
+function dec(i) { return getArr()[i]; }
+dec(x);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-1: Leave ordinary Function constructor calls', () => {
+    const code = 'Function(\'return 1\');';
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TP-5: Neutralize toString integrity that gates while(true)', () => {
+    const code = `function fn() { return 1; }
+if (fn.toString() !== 'function fn() { return 1; }') {
+  while (true) {}
+}
+ok();`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /while\s*\(\s*true\s*\)/);
+    assert.match(arb.script, /ok\(\)/);
+  });
+  it('TP-6: Flatten factory after a rotate IIFE on the factory', () => {
+    const code = `function f() {
+  const a = ['hello', 'world'];
+  f = function () { return a; };
+  return f();
+}
+(function (fn) {
+  const a = fn();
+  a.push(a.shift());
+})(f);
+function dec(i) {
+  return f()[i];
+}
+dec(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.doesNotMatch(arb.script, /dec\(0\)/);
+    assert.match(arb.script, /'(hello|world)'/);
+  });
+  it('TP-7: Remove unused factory and decoder after flattening', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /function f\(/);
+    assert.doesNotMatch(arb.script, /function dec\(/);
+  });
+  it('TP-8: Sandbox-run a custom decoder body (xor stand-in for RC4)', () => {
+    const code = `function f() {
+  const a = ['idmmn'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i, k) {
+  const s = f()[i];
+  let out = '';
+  for (let j = 0; j < s.length; j++) {
+    out += String.fromCharCode(s.charCodeAt(j) ^ k);
+  }
+  return out;
+}
+dec(0, 1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /dec\(0/);
+  });
+  it('TP-9: Flatten calls through a decoder alias', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+const w = dec;
+w(0);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.doesNotMatch(arb.script, /w\(0\)/);
+  });
+  it('TP-10: Inline 5-letter operator object then linearize pipe-split switch', () => {
+    const code = `const sto = {
+  AbCde: function (x, y) { return x + y; },
+  FgHij: 'ok'
+};
+const seq = '0|1'.split('|');
+let i = 0;
+while (true) {
+  switch (seq[i++]) {
+    case '0': sto.AbCde(1, 2); continue;
+    case '1': sto.FgHij; continue;
+  }
+  break;
+}`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /1 \+ 2/);
+    assert.match(arb.script, /'ok'/);
+    assert.doesNotMatch(arb.script, /switch/);
+  });
+  it('TN-3: Leave decoder calls whose arguments are not literals', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(idx);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-5: Keep factory when a non-literal decoder call remains', () => {
+    const code = `function f() {
+  const a = ['hello'];
+  f = function () { return a; };
+  return f();
+}
+function dec(i) {
+  return f()[i];
+}
+dec(0);
+dec(idx);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'hello'/);
+    assert.match(arb.script, /function f\(/);
+    assert.match(arb.script, /dec\(idx\)/);
+  });
+  it('TN-4: Do not inline a 5-letter object that is not operator shells', () => {
+    const code = `const user = {
+  AbCde: function () { console.log(1); return 2; }
+};
+user.AbCde();`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+});
+describe('Processors tests: CFF flattening', async () => {
+  const targetProcessors = (await import('../src/processors/cffFlattening.js'));
+  it('TP-1: Inline a 5-letter operator object', () => {
+    const code = `const sto = {
+  AbCde: function (x, y) { return x + y; },
+  FgHij: 'ok'
+};
+sto.AbCde(1, 2);
+sto.FgHij;`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /1 \+ 2/);
+    assert.match(arb.script, /'ok'/);
+  });
+  it('TP-2: Linearize a pipe-split sequenced switch', () => {
+    const code = `const seq = '0|1'.split('|');
+let i = 0;
+while (true) {
+  switch (seq[i++]) {
+    case '0': a(); continue;
+    case '1': b(); continue;
+  }
+  break;
+}`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /a\(\)/);
+    assert.match(arb.script, /b\(\)/);
+    assert.doesNotMatch(arb.script, /switch/);
+  });
+  it('TN-1: Leave a 5-letter object that is not operator shells', () => {
+    const code = `const user = {
+  AbCde: function () { console.log(1); return 2; }
+};
+user.AbCde();`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+});
+describe('Processors tests: js-confuser', async () => {
+  const targetProcessors = (await import('../src/processors/jsConfuser.js'));
+  it('TP-1: Flatten string-bank indexer calls with a literal-like state arg', () => {
+    const code = `function makeBank() {
+  return [
+    'aB1x', 'cD2y', 'eF3z', 'gH4w', 'iJ5v', 'kL6u', 'mN7t', 'oP8s',
+    'qR9r', 'sT0q', 'uV1p', 'wX2o', 'yZ3n', 'Aa4m', 'Bb5l', 'Cc6k'
+  ];
+}
+var holder = {bank: makeBank()};
+function get(state, idx) {
+  return holder.bank[(state[0] + idx) % holder.bank.length];
+}
+var state = [3];
+get(state, 0);
+get(state, 1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'gH4w'/);
+    assert.match(arb.script, /'iJ5v'/);
+    assert.doesNotMatch(arb.script, /get\(state, 0\)/);
+  });
+  it('TP-2: Collapse a deterministic sum(states) loop to final bindings', () => {
+    const code = `function sum(states) {
+  var total = 0;
+  for (var i = 0; i < states.length; i++) total += states[i];
+  return total;
+}
+var s0 = 1;
+var s1 = 0;
+var s2 = 0;
+var result = '';
+while (sum([s0, s1, s2]) !== 0) {
+  switch (s0) {
+    case 1:
+      result += 'a';
+      s0 = 0;
+      s1 = 1;
+      break;
+    default:
+      if (s1) {
+        result += 'b';
+        s1 = 0;
+        s2 = 1;
+      } else {
+        result += 'c';
+        s2 = 0;
+      }
+      break;
+  }
+}
+console.log(result);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /result = 'abc'/);
+    assert.doesNotMatch(arb.script, /while/);
+    assert.match(arb.script, /console\.log\(result\)/);
+  });
+  it('TN-1: Leave a classic array-index decoder', () => {
+    const code = `const bank = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+function get(i) { return bank[i]; }
+get(0);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-2: Leave an ordinary counter while', () => {
+    const code = `let i = 0;
+while (i < n) {
+  i++;
+}`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
   });
 });

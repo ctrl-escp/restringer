@@ -19,8 +19,13 @@ try {
 
   const restringer = new REstringer(content, {
     clean: args.clean,
-    detectObfuscationType: true,
+    detectObfuscationType: args.detectObfuscationType,
     maxIterations: args.maxIterations || undefined,
+    methods: args.methods.length ? args.methods : undefined,
+    runPreprocessors: args.runPreprocessors,
+    runPostprocessors: args.runPostprocessors,
+    maxMarkedNodes: args.maxMarkedNodes || undefined,
+    safely: args.safely,
     sandbox: args.sandbox,
   });
   if (args.quiet) restringer.logger.setLogLevelNone();
@@ -34,6 +39,15 @@ try {
   }
   if (args.maxIterations) {
     restringer.logger.log(`[!] Running at most ${args.maxIterations} iterations`);
+  }
+  if (args.methods.length) {
+    restringer.logger.log(`[!] Methods: ${args.methods.join(', ')}`);
+  }
+  if (args.maxMarkedNodes) {
+    restringer.logger.log(`[!] Max marked nodes per method: ${args.maxMarkedNodes}`);
+  }
+  if (args.safely) {
+    restringer.logger.log('[!] Using safely apply');
   }
   if (restringer.deobfuscate()) {
     restringer.logger.log(`[+] Saved ${args.outputFilename}`);

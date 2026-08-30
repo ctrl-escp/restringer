@@ -1,5 +1,4 @@
-import {Sandbox} from '../utils/sandbox.js';
-import {evalInVm} from '../utils/evalInVm.js';
+import {isLiteralTruthy, isDeterministicTestNode, evaluateDeterministicTest, NOT_RESOLVABLE} from '../utils/literalTruthiness.js';
 
 /**
  * Identifies ConditionalExpression nodes with literal test values that can be deterministically resolved.
@@ -14,8 +13,7 @@ export function resolveDeterministicConditionalExpressionsMatch(arb, candidateFi
 
   for (let i = 0; i < relevantNodes.length; i++) {
     const n = relevantNodes[i];
-    // Only resolve conditionals where test is a literal (deterministic)
-    if (n.test.type === 'Literal' && candidateFilter(n)) {
+    if (isDeterministicTestNode(n.test) && candidateFilter(n)) {
       matches.push(n);
     }
   }
@@ -23,30 +21,18 @@ export function resolveDeterministicConditionalExpressionsMatch(arb, candidateFi
 }
 
 /**
- * Transforms matched ConditionalExpression nodes by evaluating their literal test values
- * and replacing the entire conditional with either the consequent or alternate branch.
+ * Transforms a ConditionalExpression by replacing it with consequent or alternate
+ * based on the literal test's truthiness.
  * @param {Arborist} arb - The Arborist instance
- * @param {ASTNode[]} matches - Array of ConditionalExpression nodes to transform
+ * @param {ASTNode} n - ConditionalExpression node to transform
  * @return {Arborist} The updated Arborist instance
  */
-export function resolveDeterministicConditionalExpressionsTransform(arb, matches) {
-  if (!matches.length) return arb;
-
-  const sharedSb = new Sandbox();
-  try {
-    for (let i = 0; i < matches.length; i++) {
-      const n = matches[i];
-      // Evaluate the literal test value to determine truthiness
-      const replacementNode = evalInVm(`Boolean(${n.test.src});`, sharedSb);
-
-      if (replacementNode.type === 'Literal') {
-        // Replace conditional with consequent if truthy, alternate if falsy
-        arb.markNode(n, replacementNode.value ? n.consequent : n.alternate);
-      }
-    }
-  } finally {
-    sharedSb.close();
+export function resolveDeterministicConditionalExpressionsTransform(arb, n) {
+  const testValue = evaluateDeterministicTest(n.test);
+  if (testValue === NOT_RESOLVABLE) {
+    return arb;
   }
+  arb.markNode(n, isLiteralTruthy(testValue) ? n.consequent : n.alternate);
   return arb;
 }
 
@@ -60,5 +46,9 @@ export function resolveDeterministicConditionalExpressionsTransform(arb, matches
  */
 export default function resolveDeterministicConditionalExpressions(arb, candidateFilter = () => true) {
   const matches = resolveDeterministicConditionalExpressionsMatch(arb, candidateFilter);
-  return resolveDeterministicConditionalExpressionsTransform(arb, matches);
+
+  for (let i = 0; i < matches.length; i++) {
+    arb = resolveDeterministicConditionalExpressionsTransform(arb, matches[i]);
+  }
+  return arb;
 }

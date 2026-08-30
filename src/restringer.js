@@ -1,9 +1,10 @@
 import {fileURLToPath} from 'node:url';
-import {logger as flastLogger, applyIteratively} from 'flast';
+import {logger as flastLogger, applyIteratively, applyIterativelySafely} from 'flast';
 import {processors} from './processors/index.js';
 import {detectObfuscationReduced} from 'obfuscation-detector';
 import {config, safe as safeMod, unsafe as unsafeMod, utils} from './modules/index.js';
 import {assertSandboxProviderAvailable, normalizeSandboxConfig, withSandboxConfig} from './modules/utils/sandbox/index.js';
+import {resolveDeobMethods} from './utils/deobMethods.js';
 const {normalizeScript} = utils.default;
 import {readFileSync} from 'node:fs';
 const __version__ = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8')).version;
@@ -28,9 +29,14 @@ export class REstringer {
 	 * @param {Object} [options] Configuration options
 	 * @param {boolean} [options.clean=false] Remove dead nodes after deobfuscation
 	 * @param {boolean} [options.detectObfuscationType=true] Whether to auto-detect obfuscation type
-	 * @param {number} [options.maxIterations=500] Maximum safe-pass iterations per loop
+	 * @param {number} [options.maxIterations=500] Hard stop for applyIteratively
 	 * @param {boolean} [options.normalize=true] Normalize output script formatting after deobfuscation
 	 * @param {Object} [options.sandbox] Sandbox provider configuration
+	 * @param {string[]} [options.methods] Named deobfuscation methods to run instead of the default loop
+	 * @param {boolean} [options.runPreprocessors] Run detected preprocessors. Defaults off when `methods` is set so a targeted run is not preceded by type-specific processors.
+	 * @param {boolean} [options.runPostprocessors] Run detected postprocessors. Same default as `runPreprocessors`.
+	 * @param {number} [options.maxMarkedNodes] Per-modifier mark cap forwarded to flast so a long method yields and the next pass sees a rebuilt tree
+	 * @param {boolean} [options.safely=false] Use applyIterativelySafely: keep valid marks when one queued edit would fail the atomic commit
 	 */
   constructor(script, options = {}) {
     this.script = script;
@@ -42,12 +48,20 @@ export class REstringer {
     this._postprocessors = [];
     this.logger.setLogLevelLog();
     this.maxIterations = options.maxIterations ?? config.DEFAULT_MAX_ITERATIONS.value;
+    // Last completed count passed to flast as currentIteration so logs and the hard cap continue across calls.
+    this.currentIteration = 0;
     this.detectObfuscationType = options.detectObfuscationType ?? true;
     this.sandbox = normalizeSandboxConfig(options.sandbox);
+    this.maxMarkedNodes = options.maxMarkedNodes;
+    this.safely = options.safely ?? false;
+    this._namedMethods = options.methods?.length ? resolveDeobMethods(options.methods) : null;
+    this.runPreprocessors = options.runPreprocessors ?? !this._namedMethods;
+    this.runPostprocessors = options.runPostprocessors ?? !this._namedMethods;
     // Deobfuscation methods that don't use eval
     this.safeMethods = [
       safe.rearrangeSequences,
       safe.separateChainedDeclarators,
+      safe.inlineOperatorObjects,
       safe.rearrangeSwitches,
       safe.normalizeEmptyStatements,
       safe.removeRedundantBlockStatements,
@@ -58,12 +72,18 @@ export class REstringer {
       safe.resolveProxyReferences,
       safe.resolveMemberExpressionReferencesToArrayIndex,
       safe.resolveMemberExpressionsWithDirectAssignment,
+      safe.resolveDefiniteMemberExpressions,
+      safe.resolvePureLiteralMethodCalls,
       safe.parseTemplateLiteralsIntoStringLiterals,
       safe.resolveDeterministicIfStatements,
+      safe.resolveDeterministicWhileStatements,
+      safe.resolveDeterministicConditionalExpressions,
       safe.replaceCallExpressionsWithUnwrappedIdentifier,
       safe.replaceEvalCallsWithLiteralContent,
       safe.replaceIdentifierWithFixedAssignedValue,
       safe.replaceIdentifierWithFixedValueNotAssignedAtDeclaration,
+      safe.resolveMinimalAlphabet,
+      safe.resolveNestedBinaryExpressions,
       safe.replaceNewFuncCallsWithLiteralContent,
       safe.replaceBooleanExpressionsWithIf,
       safe.replaceSequencesWithExpressions,
@@ -77,13 +97,9 @@ export class REstringer {
     ];
     // Deobfuscation methods that use eval
     this.unsafeMethods = [
-      unsafe.resolveMinimalAlphabet,
-      unsafe.resolveDefiniteBinaryExpressions,
       unsafe.resolveAugmentedFunctionWrappedArrayReplacements,
       unsafe.resolveMemberExpressionsLocalReferences,
-      unsafe.resolveDefiniteMemberExpressions,
       unsafe.resolveBuiltinCalls,
-      unsafe.resolveDeterministicConditionalExpressions,
       unsafe.resolveInjectedPrototypeMethodCalls,
       unsafe.resolveLocalCalls,
       unsafe.resolveEvalCallsOnNonLiterals,
@@ -107,6 +123,43 @@ export class REstringer {
   }
 
   /**
+	 * One applyIteratively call with the shared hard cap and log offset.
+	 * Does not bump `currentIteration`: flast may run many inner passes and does not
+	 * return how many completed. Callers that issued a single-pass stage increment themselves.
+	 *
+	 * @param {string} script Source to transform
+	 * @param {Function[]} methods Modifier functions
+	 * @param {Object} [opts]
+	 * @param {boolean} [opts.includeMaxMarkedNodes=true] False for normalize/clean so the mark cap does not slice cosmetic passes
+	 * @return {string} Possibly modified source
+	 */
+  _applyIteratively(script, methods, {includeMaxMarkedNodes = true} = {}) {
+    if (this.currentIteration >= this.maxIterations) return script;
+    const options = {
+      currentIteration: this.currentIteration,
+      maxIterations: this.maxIterations,
+    };
+    if (includeMaxMarkedNodes && this.maxMarkedNodes) {
+      options.maxMarkedNodes = this.maxMarkedNodes;
+    }
+    let next = script;
+    if (this.safely) {
+      const {script: out, rejected} = applyIterativelySafely(script, methods, options);
+      next = out;
+      if (rejected?.length) {
+        this.logger.log(`[!] ${rejected.length} edit(s) rejected by safely apply`);
+        for (let i = 0; i < rejected.length; i++) {
+          const rec = rejected[i];
+          this.logger.debug(`[!] Rejected ${rec.type} node ${rec.nodeId}: ${rec.error}`);
+        }
+      }
+    } else {
+      next = applyIteratively(script, methods, options);
+    }
+    return next;
+  }
+
+  /**
 	 * Iteratively applies safe and unsafe deobfuscation methods until no further changes occur.
 	 *
 	 * Algorithm per iteration:
@@ -119,12 +172,25 @@ export class REstringer {
 	 * @return {void}
 	 */
   _loopSafeAndUnsafeDeobfuscationMethods() {
+    // Named methods replace the whole main loop: one list, caller order, no safe-then-unsafe split.
+    if (this._namedMethods) {
+      this.modified = false;
+      const script = this._applyIteratively(this.script, this._namedMethods);
+      if (this.script !== script) {
+        this.modified = true;
+        this.script = script;
+      }
+      return;
+    }
     // Track whether any iteration made changes (vs this.modified which tracks current iteration only)
     let wasEverModified, script;
     do {
       this.modified = false;
-      script = applyIteratively(this.script, this.safeMethods, this.maxIterations);
-      script = applyIteratively(script, this.unsafeMethods, 1);
+      script = this._applyIteratively(this.script, this.safeMethods);
+      script = this._applyIteratively(script, this.unsafeMethods);
+      // Only the unsafe call is treated as one pass. The safe call may have used many
+      // inner iterations; flast does not report that count.
+      if (this.currentIteration < this.maxIterations) this.currentIteration++;
       if (this.script !== script) {
         this.modified = true;
         this.script = script;
@@ -146,11 +212,19 @@ export class REstringer {
 
     return withSandboxConfig(this.sandbox, () => {
       if (this.detectObfuscationType) this.determineObfuscationType();
-      this._runProcessors(this._preprocessors);
+      if (this.runPreprocessors) this._runProcessors(this._preprocessors);
       this._loopSafeAndUnsafeDeobfuscationMethods();
-      this._runProcessors(this._postprocessors);
-      if (this.modified && this.normalize) this.script = normalizeScript(this.script);
-      if (this.clean) this.script = applyIteratively(this.script, [safe.removeDeadNodes], this.maxIterations);
+      if (this.runPostprocessors) this._runProcessors(this._postprocessors);
+      if (this.modified && this.normalize) {
+        this.script = normalizeScript(this.script, {
+          currentIteration: this.currentIteration,
+          maxIterations: this.maxIterations,
+          safely: this.safely,
+        });
+      }
+      if (this.clean) {
+        this.script = this._applyIteratively(this.script, [safe.removeDeadNodes], {includeMaxMarkedNodes: false});
+      }
       return this.modified;
     });
   }
@@ -164,7 +238,9 @@ export class REstringer {
   _runProcessors(processorsArr) {
     for (let i = 0; i < processorsArr.length; i++) {
       const processor = processorsArr[i];
-      this.script = applyIteratively(this.script, [processor], 1);
+      this.script = this._applyIteratively(this.script, [processor]);
+      // Each processor is its own applyIteratively call; +1 keeps the next stage's logs in sequence.
+      if (this.currentIteration < this.maxIterations) this.currentIteration++;
     }
   }
 }

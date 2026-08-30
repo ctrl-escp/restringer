@@ -81,6 +81,12 @@ describe('SAFE: normalizeComputed', async () => {
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
+  it('TP-4: Neutralize debugger when converting computed access to an identifier', () => {
+    const code = 'obj[\'debugger\'];';
+    const expected = 'obj.debugge_;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
 });
 describe('SAFE: normalizeEmptyStatements', async () => {
   const targetModule = (await import('../src/modules/safe/normalizeEmptyStatements.js')).default;
@@ -125,6 +131,81 @@ describe('SAFE: normalizeEmptyStatements', async () => {
     const expected = 'for (;;);';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+});
+describe('SAFE: normalizeRedundantNotOperator', async () => {
+  const targetModule = (await import('../src/modules/safe/normalizeRedundantNotOperator.js')).default;
+  it('TP-1: Mixed literals and expressions', () => {
+    const code = '!true || !false || !0 || !1 || !a || !\'a\' || ![] || !{} || !-1 || !!true || !!!true';
+    const expected = 'false || true || true || false || !a || false || false || false || false || true || false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-2: String literals', () => {
+    const code = '!\'\' || !\'hello\' || !\'0\' || !\' \'';
+    const expected = 'true || false || false || false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-3: Number literals', () => {
+    const code = '!42 || !-42 || !0.5 || !-0.5';
+    const expected = 'false || false || false || false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-4: Null literal', () => {
+    const code = '!null';
+    const expected = 'true;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-5: Empty array and object literals', () => {
+    const code = '!{} || ![]';
+    const expected = 'false || false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-6: Simple nested NOT operations', () => {
+    const code = '!!false || !!true';
+    const expected = 'false || true;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-7: Normalize complex literals that can be safely evaluated', () => {
+    const code = '!undefined || ![1,2,3] || !{a:1}';
+    const expected = 'true || false || false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-1: Do not normalize NOT on variables', () => {
+    const code = '!variable || !obj.prop || !func()';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-2: Do not normalize NOT on complex expressions', () => {
+    const code = '!(a + b) || !(x > y) || !(z && w)';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-3: Do not normalize NOT on function calls', () => {
+    const code = '!getValue() || !Math.random() || !Array.isArray(arr)';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-4: Do not normalize NOT on computed properties', () => {
+    const code = '!obj[key] || !arr[0] || !matrix[i][j]';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-5: Do not normalize literals with unpredictable values', () => {
+    const code = '!Infinity || !-Infinity';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
   });
 });
 describe('SAFE: parseTemplateLiteralsIntoStringLiterals', async () => {
@@ -310,6 +391,35 @@ case 1: console.log(1); a = 2; break;}}})();`;
     const expected = 'var x = 0; switch (x) { case variable: doSomething(); break; }';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+  it('TP-6: Linearize switch on a sequenced array index', () => {
+    const code = 'const seq = [\'2\', \'0\', \'1\']; let i = 0; while (true) { switch (seq[i++]) { case \'0\': a(); continue; case \'1\': b(); continue; case \'2\': c(); continue; } break; }';
+    const expected = `const seq = [
+  '2',
+  '0',
+  '1'
+];
+let i = 0;
+while (true) {
+  {
+    c();
+    a();
+    b();
+  }
+  break;
+}`;
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-3: Do not linearize sequenced switch when the array is not literals', () => {
+    const code = 'const seq = ids; let i = 0; switch (seq[i++]) { case \'0\': a(); break; }';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-4: Do not linearize sequenced switch with a non-literal case test', () => {
+    const code = 'const seq = [\'0\']; let i = 0; switch (seq[i++]) { case key: a(); break; }';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
   });
 });
 describe('SAFE: removeDeadNodes', async () => {
@@ -1055,6 +1165,122 @@ describe('SAFE: resolveDeterministicIfStatements', async () => {
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
+  it('TP-11: Fold if with equal string literals', () => {
+    const code = 'if (\'a\' === \'a\') { x(); } else { y(); }';
+    const expected = '{\n  x();\n}';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-12: Fold if with unequal string literals', () => {
+    const code = 'if (\'a\' === \'b\') { x(); } else { y(); }';
+    const expected = '{\n  y();\n}';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-5: Do not fold if comparison with an identifier', () => {
+    const code = 'if (a === \'a\') { x(); }';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+});
+describe('SAFE: resolveDeterministicConditionalExpressions', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveDeterministicConditionalExpressions.js')).default;
+  it('TP-1: Boolean literals (true/false)', () => {
+    const code = '(true ? 1 : 2); (false ? 3 : 4);';
+    const expected = '1;\n4;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-2: Truthy string literals', () => {
+    const code = '(\'hello\' ? \'yes\' : \'no\'); (\'a\' ? 42 : 0);';
+    const expected = '\'yes\';\n42;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-3: Falsy string literal (empty string)', () => {
+    const code = '(\'\' ? \'yes\' : \'no\'); (\'\' ? 42 : 0);';
+    const expected = '\'no\';\n0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-4: Truthy number literals', () => {
+    const code = '(1 ? \'one\' : \'zero\'); (42 ? \'yes\' : \'no\'); (123 ? \'positive\' : \'zero\');';
+    const expected = '\'one\';\n\'yes\';\n\'positive\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-5: Falsy number literal (zero)', () => {
+    const code = '(0 ? \'yes\' : \'no\'); (0 ? 42 : \'zero\');';
+    const expected = '\'no\';\n\'zero\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-6: Null literal', () => {
+    const code = '(null ? \'yes\' : \'no\'); (null ? \'defined\' : \'null\');';
+    const expected = '\'no\';\n\'null\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-7: Nested conditional expressions (single pass)', () => {
+    const code = '(true ? (false ? \'inner1\' : \'inner2\') : \'outer\');';
+    const expected = 'false ? \'inner1\' : \'inner2\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-8: Complex expressions as branches', () => {
+    const code = '(1 ? console.log(\'truthy\') : console.log(\'falsy\'));';
+    const expected = 'console.log(\'truthy\');';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-1: Non-literal test expressions', () => {
+    const code = '({} ? 1 : 2); ([].length ? 3 : 4);';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-2: Variable test expressions', () => {
+    const code = '(x ? \'yes\' : \'no\'); (condition ? true : false);';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-3: Function call test expressions', () => {
+    const code = '(getValue() ? \'yes\' : \'no\'); (check() ? 1 : 0);';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-9: Fold ternary with equal string literals', () => {
+    const code = '(\'x\' === \'x\' ? 1 : 2);';
+    const expected = '1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-4: Binary expression test expressions', () => {
+    const code = '(a + b ? \'yes\' : \'no\'); (x > 5 ? \'big\' : \'small\');';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-5: Member expression test expressions', () => {
+    const code = '(obj.prop ? \'yes\' : \'no\'); (arr[0] ? \'first\' : \'empty\');';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-10: Fold unary-of-literal ternary tests', () => {
+    const code = '(-1 ? \'negative\' : \'zero\'); (!true ? \'no\' : \'yes\');';
+    const expected = '\'negative\';\n\'yes\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-7: Undefined identifier (not literal)', () => {
+    const code = '(undefined ? \'defined\' : \'undefined\');';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
 });
 describe('SAFE: resolveFunctionConstructorCalls', async () => {
   const targetModule = (await import('../src/modules/safe/resolveFunctionConstructorCalls.js')).default;
@@ -1091,6 +1317,12 @@ describe('SAFE: resolveFunctionConstructorCalls', async () => {
   it('TP-6: Replace Function.constructor with empty body', () => {
     const code = 'const func = Function.constructor(\'\');';
     const expected = 'const func = function () {\n};';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-6b: Neutralize debugger identifier in constructor body', () => {
+    const code = 'const func = Function.constructor(\'return obj.debugger;\');';
+    const expected = 'const func = function () {\n  return obj.debugge_;\n};';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
@@ -1135,6 +1367,87 @@ describe('SAFE: resolveFunctionConstructorCalls', async () => {
     const expected = 'const result = function () {\n  test;\n};';
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+});
+describe('SAFE: resolveDefiniteMemberExpressions', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveDefiniteMemberExpressions.js')).default;
+  it('TP-1: String and array indexing with properties', () => {
+    const code = '\'123\'[0]; \'hello\'.length;';
+    const expected = '\'1\';\n5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-2: Array literal indexing', () => {
+    const code = '[1, 2, 3][0]; [4, 5, 6][2];';
+    const expected = '1;\n6;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-3: String indexing with different positions', () => {
+    const code = '\'test\'[1]; \'world\'[4];';
+    const expected = '\'e\';\n\'d\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-4: Array length property', () => {
+    const code = '[1, 2, 3, 4].length; [\'a\', \'b\'].length;';
+    const expected = '4;\n2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-5: Mixed literal types in arrays', () => {
+    const code = '[\'hello\', 42, true][0]; [null, undefined, \'test\'][2];';
+    const expected = '\'hello\';\n\'test\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-6: Non-computed property access with identifier', () => {
+    const code = '\'testing\'.length; [1, 2, 3].length;';
+    const expected = '7;\n3;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-1: Do not transform update expressions', () => {
+    const code = '++[[]][0];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-2: Do not transform method calls (callee position)', () => {
+    const code = '\'test\'.split(\'\'); [1, 2, 3].join(\',\');';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-3: Do not transform computed properties with variables', () => {
+    const code = '\'hello\'[index]; arr[i];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-4: Do not transform non-literal objects', () => {
+    const code = 'obj.property; variable[0];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-5: Do not transform empty literals', () => {
+    const code = '\'\'[0]; [].length;';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-6: Do not transform complex property expressions', () => {
+    const code = '\'test\'[getValue()]; obj[prop + \'name\'];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-7: Do not transform out-of-bounds access', () => {
+    const code = '\'abc\'[10]; [1, 2][5];';
+    const expected = code;
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
   });
 });
 describe('SAFE: resolveMemberExpressionReferencesToArrayIndex', async () => {
@@ -1288,6 +1601,237 @@ describe('SAFE: resolveMemberExpressionsWithDirectAssignment', async () => {
     assert.strictEqual(result, expected);
   });
 });
+describe('SAFE: resolveMinimalAlphabet', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveMinimalAlphabet.js')).default;
+  it('TP-1: Unary expressions on literals and arrays', () => {
+    const code = '+true; -true; +false; -false; +[]; ~true; ~false; ~[]; +[3]; +[\'\']; -[4]; ![]; +[[]];';
+    const expected = '1;\n-\'1\';\n0;\n-0;\n0;\n-\'2\';\n-\'1\';\n-\'1\';\n3;\n0;\n-\'4\';\nfalse;\n0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-2: Binary expressions with arrays (JSFuck patterns)', () => {
+    const code = '[] + []; [+[]]; (![]+[]); +[!+[]+!+[]];';
+    const expected = '\'\';\n[0];\n\'false\';\n2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-3: Unary expressions on null literal', () => {
+    const code = '+null; -null; !null;';
+    const expected = '0;\n-0;\ntrue;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-4: Binary expressions with string concatenation', () => {
+    const code = 'true + []; false + \'\'; null + \'test\';';
+    const expected = '\'true\';\n\'false\';\n\'nulltest\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-5: Fold empty-array index plus empty array (JSFuck undefined)', () => {
+    const code = '[][[]] + [];';
+    const expected = '\'undefined\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-6: Neutralize debugger reconstructed from split strings', () => {
+    const code = '\'debu\' + \'gger\';';
+    const expected = '\'debugge_\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TP-7: Fold number toString radix used by JSFuck', () => {
+    const code = '\'return e\' + 31 .toString(\'32\') + \'false\'[+true] + \'l\';';
+    const expected = '\'return eval\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-1: Expressions containing ThisExpression should be skipped', () => {
+    const code = '-false; -[]; +{}; -{}; -\'a\'; ~{}; -[\'\']; +[1, 2]; +this; +[this];';
+    const expected = '-0;\n-0;\n+{};\n-{};\nNaN;\n~{};\n-0;\nNaN;\n+this;\n+[this];';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-2: Binary expressions with non-plus operators', () => {
+    const code = 'true - false; true * false; true / false;';
+    const expected = 'true - false; true * false; true / false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-3: Unary expressions on numeric literals', () => {
+    const code = '+42; -42; ~42; !42;';
+    const expected = '+42; -42; ~42; !42;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+  it('TN-4: Unary expressions on undefined identifier', () => {
+    const code = '+undefined; -undefined;';
+    const expected = '+undefined; -undefined;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.deepStrictEqual(result, expected);
+  });
+});
+describe('SAFE: resolveNestedBinaryExpressions', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveNestedBinaryExpressions.js')).default;
+  it('TP-1: Fold mixed arithmetic including string-to-number multiply', () => {
+    const code = '2 * (5 + 1) - (4 / 2) + \'1\' * 2;';
+    const expected = '12;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-2: Fold mixed arithmetic then string concatenation', () => {
+    const code = '2 * (5 + 1) - (4 / 2) + \'1\';';
+    const expected = '\'101\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-3: Fold literal subtrees while leaving a + 0 intact', () => {
+    const code = '2 * (a + 0) - ((5 - 1) / 2);';
+    const expected = '2 * (a + 0) - 2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-4: Respect operator precedence without parentheses', () => {
+    const code = '1 + 2 * 2;';
+    const expected = '5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-5: Fold parenthesized addition before multiply', () => {
+    const code = '(1 + 2) * 2;';
+    const expected = '6;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-6: Fold left-associative literals on the left of an identifier', () => {
+    const code = '2 + 3 + a;';
+    const expected = '5 + a;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-7: Regroup multiplicative literals around an identifier', () => {
+    const code = 'a * 2 * 3;';
+    const expected = '6 * a;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-8: Combine subtracted literals in a pure minus chain', () => {
+    const code = 'a - 2 - 3;';
+    const expected = 'a - 5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-9: Concatenate left-to-right once a string appears', () => {
+    const code = '\'1\' + 2 + 3;';
+    const expected = '\'123\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-10: Add numbers before concatenating a string', () => {
+    const code = '1 + 2 + \'3\';';
+    const expected = '\'33\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-11: Fold parenthesized literals beside an identifier', () => {
+    const code = 'a + (2 + 3);';
+    const expected = 'a + 5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-12: Fold bitwise AND of literals', () => {
+    const code = '5 & 3;';
+    const expected = '1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-13: Fold comparison of literals', () => {
+    const code = '5 > 3;';
+    const expected = 'true;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-14: Fold subtraction to a negative number', () => {
+    const code = '10 - 15;';
+    const expected = '-5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-15: Neutralize debugger reconstructed from split strings', () => {
+    const code = '\'debu\' + \'gger\';';
+    const expected = '\'debugge_\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-16: Neutralize debugger in concatenated strings regardless of split', () => {
+    const code = '\'debug\' + \'ger\';';
+    const expected = '\'debugge_\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-17: Fold array coercions without eval', () => {
+    const code = '[] + []; 2 + []; +[] * 3;';
+    const expected = '\'\';\n\'2\';\n0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-1: Do not fold a + 0 (identifier may be a string)', () => {
+    const code = 'a + 0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-2: Do not fold a * 1 (identifier may be a string)', () => {
+    const code = 'a * 1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-3: Do not fold a * 0 to 0 (non-numeric values become NaN)', () => {
+    const code = 'a * 0;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TP-18: Fold adjacent numeric + literals beside an identifier', () => {
+    const code = 'a + 2 + 3;';
+    const expected = 'a + 5;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-19: Fold adjacent numeric + literals between identifiers', () => {
+    const code = 'a + 2 + 3 + b;';
+    const expected = 'a + 5 + b;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-4: Do not jump an identifier when folding +', () => {
+    const code = '2 + a + 3;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-6: Do not flatten mixed plus and minus around an identifier', () => {
+    const code = 'a - 2 + 3;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-7: Do not fold expressions with function calls', () => {
+    const code = 'foo() + 1;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-8: Do not fold member expressions', () => {
+    const code = 'obj.x * 2;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-9: Do not fold logical expressions', () => {
+    const code = 'true && false;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-10: Do not fold two unknown identifiers', () => {
+    const code = 'a + b;';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+});
 describe('SAFE: resolveProxyCalls', async () => {
   const targetModule = (await import('../src/modules/safe/resolveProxyCalls.js')).default;
   it('TP-1: Replace chained proxy calls with direct function calls', () => {
@@ -1361,6 +1905,23 @@ describe('SAFE: resolveProxyCalls', async () => {
     const expected = code;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+  it('TP-5: Remap permuted proxy arguments', () => {
+    const code = 'function t(a, b) { return a - b; } function p(a, b) { return t(b, a); } p(1, 2);';
+    const expected = 'function t(a, b) {\n  return a - b;\n}\nfunction p(a, b) {\n  return t(b, a);\n}\nt(2, 1);';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-6: Remap wrapper with unused params and param minus literal', () => {
+    const code = 'function dec(i, k) { return table[i]; } function w(f0, i, k, f1) { return dec(i - 4, k); } w(0, 10, \'x\', 1);';
+    const expected = 'function dec(i, k) {\n  return table[i];\n}\nfunction w(f0, i, k, f1) {\n  return dec(i - 4, k);\n}\ndec(6, \'x\');';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-9: Do not rewrite a cyclic proxy pair', () => {
+    const code = 'function a() { return b(); } function b() { return a(); } a();';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
   });
 });
 describe('SAFE: resolveProxyReferences', async () => {
@@ -1468,6 +2029,12 @@ describe('SAFE: resolveProxyVariables', async () => {
     const code = 'const a2b = atob; console.log(a2b(\'NDI=\'));';
     const expected = 'console.log(atob(\'NDI=\'));';
     const result = applyModuleToCode(code, targetModule, true);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-8: Rewrite decoder alias calls to the original binding', () => {
+    const code = 'function dec(i) { return table[i]; } const w = dec; w(1);';
+    const expected = 'function dec(i) {\n  return table[i];\n}\nconst w = dec;\ndec(1);';
+    const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
   it('TP-2: Remove unused proxy variable declaration', () => {
@@ -1995,12 +2562,21 @@ typeof 1;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
   });
-  it('TN-2: Do not unwrap function with wrong parameter count', () => {
+  it('TP-4: Unwrap binary with one literal operand', () => {
     const code = `function singleParam(a) { return a + 1; }
 		singleParam(5);`;
-    const expected = code;
+    const expected = `function singleParam(a) {
+  return a + 1;
+}
+5 + 1;`;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+  it('TN-2: Do not unwrap function with a non-param, non-literal operand', () => {
+    const code = `function usesGlobal(a) { return a + g; }
+		usesGlobal(5);`;
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
   });
   it('TN-3: Do not unwrap operation not using parameters', () => {
     const code = `function fixedAdd(a, b) { return 5 + 10; }
@@ -2279,5 +2855,85 @@ describe('SAFE: simplifyIfStatements', async () => {
     const expected = code;
     const result = applyModuleToCode(code, targetModule);
     assert.strictEqual(result, expected);
+  });
+});
+describe('SAFE: resolvePureLiteralMethodCalls', async () => {
+  const targetModule = (await import('../src/modules/safe/resolvePureLiteralMethodCalls.js')).default;
+  it('TP-1: Fold string split on a literal separator', () => {
+    const code = '\'a|b|c\'.split(\'|\');';
+    const expected = '[\n  \'a\',\n  \'b\',\n  \'c\'\n];';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-2: Fold split of an empty string', () => {
+    const code = '\'\'.split(\'\');';
+    const expected = '[];';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-1: Do not fold split on an identifier receiver', () => {
+    const code = 's.split(\'|\');';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-2: Do not fold split with a non-literal separator', () => {
+    const code = '\'a|b\'.split(sep);';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-3: Do not fold replace unless allow-listed', () => {
+    const code = '\'hello\'.replace(\'h\', \'j\');';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+});
+describe('SAFE: inlineOperatorObjects', async () => {
+  const targetModule = (await import('../src/modules/safe/inlineOperatorObjects.js')).default;
+  it('TP-1: Inline operator and literal properties', () => {
+    const code = 'const sto = { add: (a, b) => a + b, msg: \'hello\' }; sto.add(u, v); sto.msg;';
+    const expected = 'const sto = {\n  add: (a, b) => a + b,\n  msg: \'hello\'\n};\nu + v;\n\'hello\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-2: Inline 5-letter CFF keys', () => {
+    const code = 'const sto = { AbCde: function (x, y) { return x === y; }, FgHij: \'ok\' }; sto.AbCde(u, v); sto.FgHij;';
+    const expected = 'const sto = {\n  AbCde: function (x, y) {\n    return x === y;\n  },\n  FgHij: \'ok\'\n};\nu === v;\n\'ok\';';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-1: Do not inline a reassigned object', () => {
+    const code = 'let sto = { add: (a, b) => a + b }; sto = {}; sto.add(1, 2);';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-2: Do not inline an object passed as a whole', () => {
+    const code = 'const sto = { add: (a, b) => a + b }; fn(sto);';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+  it('TN-3: Do not inline a multi-statement property', () => {
+    const code = 'const sto = { add: function (a, b) { console.log(a); return a + b; } }; sto.add(1, 2);';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
+  });
+});
+describe('SAFE: resolveDeterministicWhileStatements', async () => {
+  const targetModule = (await import('../src/modules/safe/resolveDeterministicWhileStatements.js')).default;
+  it('TP-1: Remove while(false)', () => {
+    const code = 'while (false) { x(); } y();';
+    const expected = 'y();';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TP-2: Remove while with unequal string literals', () => {
+    const code = 'while (\'a\' === \'b\') { x(); }';
+    const expected = '';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, expected);
+  });
+  it('TN-1: Do not fold while with an identifier test', () => {
+    const code = 'while (cond) { x(); }';
+    const result = applyModuleToCode(code, targetModule);
+    assert.strictEqual(result, code);
   });
 });

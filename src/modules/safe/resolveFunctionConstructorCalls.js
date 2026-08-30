@@ -1,4 +1,5 @@
 import {generateFlatAST} from 'flast';
+import {neutralizeInjectedNode, neutralizeInjectedString} from '../utils/neutralizeTraps.js';
 
 /**
  * Builds the function arguments string from constructor arguments.
@@ -18,7 +19,7 @@ function buildArgumentsString(args) {
   // All arguments except the last are parameter names
   const paramNames = [];
   for (let i = 0; i < args.length - 1; i++) {
-    paramNames.push(args[i]);
+    paramNames.push(neutralizeInjectedString(args[i]));
   }
 
   return paramNames.join(', ');
@@ -48,7 +49,7 @@ function generateFunctionExpression(argumentValues) {
     const ast = generateFlatAST(functionCode, {detailed: false, includeSrc: false});
 
     // Return the function expression node (index 2 in the generated AST)
-    return ast[2] || null;
+    return ast[2] ? neutralizeInjectedNode(ast[2]) : null;
   } catch {
     // Return null if code generation fails (invalid syntax, etc.)
     return null;

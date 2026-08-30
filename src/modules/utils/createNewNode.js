@@ -1,6 +1,7 @@
 import {BAD_VALUE} from '../config.js';
 import {getObjType} from './getObjType.js';
 import {parseCode, logger} from 'flast';
+import {neutralizeInjectedNode, neutralizeInjectedString} from './neutralizeTraps.js';
 
 /**
  * Creates an AST node from a JavaScript value by analyzing its type and structure.
@@ -20,6 +21,9 @@ export function createNewNode(value) {
       case 'String':
       case 'Number':
       case 'Boolean': {
+        if (typeof value === 'string') {
+          value = neutralizeInjectedString(value);
+        }
         const valueStr = String(value);
         const firstChar = valueStr[0];
 
@@ -46,7 +50,7 @@ export function createNewNode(value) {
           // Special numeric identifiers
           newNode = {
             type: 'Identifier',
-            name: valueStr,
+            name: neutralizeInjectedString(valueStr),
           };
         } else if (Object.is(value, -0)) {
           // Special case: negative zero requires unary expression
@@ -151,7 +155,7 @@ export function createNewNode(value) {
           // Attempt to parse function source code into AST
           const parsed = parseCode(value.toString());
           if (parsed?.body?.[0]) {
-            newNode = parsed.body[0];
+            newNode = neutralizeInjectedNode(parsed.body[0]);
           }
         } catch {
           // Native functions or unparseable functions return BAD_VALUE

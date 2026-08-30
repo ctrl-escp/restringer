@@ -19,36 +19,173 @@ function hasOnlyReturnStatement(funcNode) {
 }
 
 /**
- * Validates that parameter names are passed through in the same order to the target function.
- *
- * For a valid proxy function, each parameter must be passed to the target function
- * in the exact same order and position. This ensures the proxy doesn't modify,
- * reorder, or omit any arguments.
- *
- * @param {Array} params - Function parameters array
- * @param {Array} callArgs - Arguments passed to the target function call
- * @return {boolean} True if all parameters are passed through correctly
+ * @param {ASTNode} node
+ * @return {boolean}
  */
-function areParametersPassedThrough(params, callArgs) {
-  // Must have same number of parameters and arguments
-  if (!params || !callArgs || params.length !== callArgs.length) {
+function isLiteralLike(node) {
+  if (!node) {
     return false;
   }
+  if (node.type === 'Literal') {
+    return true;
+  }
+  return node.type === 'UnaryExpression' && node.argument?.type === 'Literal';
+}
 
-  // Each parameter must match corresponding argument by name
-  for (let i = 0; i < params.length; i++) {
-    const param = params[i];
-    const arg = callArgs[i];
+/**
+ * True when an inner-call argument is a param, a literal, or `param ± literal`.
+ *
+ * @param {ASTNode} arg
+ * @param {Set<ASTNode>} paramDecls
+ * @return {boolean}
+ */
+function isRemappableArg(arg, paramDecls) {
+  if (!arg) {
+    return false;
+  }
+  if (isLiteralLike(arg)) {
+    return true;
+  }
+  if (arg.type === 'Identifier' && arg.declNode && paramDecls.has(arg.declNode)) {
+    return true;
+  }
+  if (arg.type === 'BinaryExpression' && (arg.operator === '+' || arg.operator === '-')) {
+    const leftParam = arg.left?.type === 'Identifier' && paramDecls.has(arg.left.declNode);
+    const rightParam = arg.right?.type === 'Identifier' && paramDecls.has(arg.right.declNode);
+    const leftLit = isLiteralLike(arg.left);
+    const rightLit = isLiteralLike(arg.right);
+    return (leftParam && rightLit) || (rightParam && leftLit) || (leftParam && rightParam);
+  }
+  return false;
+}
 
-    // Both must be identifiers with matching names
-    if (param?.type !== 'Identifier' ||
-			arg?.type !== 'Identifier' ||
-			param?.name !== arg?.name) {
+/**
+ * Arguments are a remap of params (permutation, unused extras, one literal / param±n OK).
+ *
+ * @param {ASTNode[]} params
+ * @param {ASTNode[]} callArgs
+ * @return {boolean}
+ */
+function areArgumentsRemappable(params, callArgs) {
+  if (!params || !callArgs) {
+    return false;
+  }
+  const paramDecls = new Set(params);
+  for (let i = 0; i < callArgs.length; i++) {
+    if (!isRemappableArg(callArgs[i], paramDecls)) {
       return false;
     }
   }
-
   return true;
+}
+
+/**
+ * @param {ASTNode} arg
+ * @param {ASTNode[]} params
+ * @param {ASTNode[]} outerArgs
+ * @return {ASTNode|null}
+ */
+/**
+ * @param {ASTNode} node
+ * @return {number|undefined}
+ */
+function literalNumber(node) {
+  if (node?.type === 'Literal' && typeof node.value === 'number' && Number.isFinite(node.value)) {
+    return node.value;
+  }
+  if (node?.type === 'UnaryExpression' && node.argument?.type === 'Literal' &&
+		typeof node.argument.value === 'number') {
+    if (node.operator === '-') {
+      return -node.argument.value;
+    }
+    if (node.operator === '+') {
+      return +node.argument.value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * @param {string} operator
+ * @param {ASTNode} left
+ * @param {ASTNode} right
+ * @return {ASTNode|null}
+ */
+function foldRemappedLiteralBinary(operator, left, right) {
+  const lv = literalNumber(left);
+  const rv = literalNumber(right);
+  if (lv === undefined || rv === undefined) {
+    return null;
+  }
+  let value;
+  if (operator === '+') {
+    value = lv + rv;
+  } else if (operator === '-') {
+    value = lv - rv;
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return {
+    type: 'Literal',
+    value,
+    raw: String(value),
+  };
+}
+
+function remapArg(arg, params, outerArgs) {
+  if (isLiteralLike(arg)) {
+    return arg;
+  }
+  if (arg.type === 'Identifier') {
+    for (let i = 0; i < params.length; i++) {
+      if (arg.declNode === params[i] || arg.name === params[i].name) {
+        return outerArgs[i] || arg;
+      }
+    }
+    return arg;
+  }
+  if (arg.type === 'BinaryExpression') {
+    const left = remapArg(arg.left, params, outerArgs);
+    const right = remapArg(arg.right, params, outerArgs);
+    if (!left || !right) {
+      return null;
+    }
+    const folded = foldRemappedLiteralBinary(arg.operator, left, right);
+    if (folded) {
+      return folded;
+    }
+    return {
+      type: 'BinaryExpression',
+      operator: arg.operator,
+      left,
+      right,
+    };
+  }
+  return null;
+}
+
+/**
+ * In-pass cycle guard: skip a→b when following proxy targets returns to a.
+ *
+ * @param {string} fromName
+ * @param {string} toName
+ * @param {Map<string, string>} proxyTargets
+ * @return {boolean}
+ */
+function wouldCycle(fromName, toName, proxyTargets) {
+  const seen = new Set([fromName]);
+  let current = toName;
+  while (current) {
+    if (seen.has(current)) {
+      return true;
+    }
+    seen.add(current);
+    current = proxyTargets.get(current);
+  }
+  return false;
 }
 
 /**
@@ -103,19 +240,38 @@ export function resolveProxyCallsMatch(arb, candidateFilter = () => true) {
       continue;
     }
 
-    // All parameters must be passed through correctly
-    if (!areParametersPassedThrough(n.params, returnArg.arguments)) {
+    if (!areArgumentsRemappable(n.params, returnArg.arguments || [])) {
       continue;
     }
 
     matches.push({
       funcNode: n,
       targetCallee: returnArg.callee,
+      innerArguments: returnArg.arguments || [],
       references: n.id.references,
     });
   }
 
-  return matches;
+  const proxyTargets = new Map();
+  for (let i = 0; i < matches.length; i++) {
+    const name = matches[i].funcNode.id?.name;
+    const target = matches[i].targetCallee?.name;
+    if (name && target) {
+      proxyTargets.set(name, target);
+    }
+  }
+
+  const acyclic = [];
+  for (let i = 0; i < matches.length; i++) {
+    const name = matches[i].funcNode.id?.name;
+    const target = matches[i].targetCallee?.name;
+    if (name && target && wouldCycle(name, target, proxyTargets)) {
+      continue;
+    }
+    acyclic.push(matches[i]);
+  }
+
+  return acyclic;
 }
 
 /**
@@ -130,11 +286,35 @@ export function resolveProxyCallsMatch(arb, candidateFilter = () => true) {
  * @return {Arborist} The modified Arborist instance
  */
 export function resolveProxyCallsTransform(arb, match) {
-  const {targetCallee, references} = match;
+  const {funcNode, targetCallee, innerArguments, references} = match;
+  const params = funcNode.params || [];
+  const sameOrderPassthrough = innerArguments.length === params.length &&
+		innerArguments.every((arg, idx) => arg.type === 'Identifier' &&
+			(arg.declNode === params[idx] || arg.name === params[idx].name));
 
-  // Replace each reference to the proxy function with the target function
   for (let i = 0; i < references.length; i++) {
-    arb.markNode(references[i], targetCallee);
+    const ref = references[i];
+    const call = ref.parentNode;
+    if (!sameOrderPassthrough && call?.type === 'CallExpression' && call.callee === ref) {
+      const newArgs = [];
+      for (let j = 0; j < innerArguments.length; j++) {
+        const mapped = remapArg(innerArguments[j], params, call.arguments || []);
+        if (!mapped) {
+          newArgs.length = 0;
+          break;
+        }
+        newArgs.push(mapped);
+      }
+      if (newArgs.length === innerArguments.length) {
+        arb.markNode(call, {
+          type: 'CallExpression',
+          callee: targetCallee,
+          arguments: newArgs,
+        });
+        continue;
+      }
+    }
+    arb.markNode(ref, targetCallee);
   }
 
   return arb;
