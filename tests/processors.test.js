@@ -533,3 +533,122 @@ user.AbCde();`;
     assert.strictEqual(arb.script, originalScript);
   });
 });
+describe('Processors tests: CFF flattening', async () => {
+  const targetProcessors = (await import('../src/processors/cffFlattening.js'));
+  it('TP-1: Inline a 5-letter operator object', () => {
+    const code = `const sto = {
+  AbCde: function (x, y) { return x + y; },
+  FgHij: 'ok'
+};
+sto.AbCde(1, 2);
+sto.FgHij;`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /1 \+ 2/);
+    assert.match(arb.script, /'ok'/);
+  });
+  it('TP-2: Linearize a pipe-split sequenced switch', () => {
+    const code = `const seq = '0|1'.split('|');
+let i = 0;
+while (true) {
+  switch (seq[i++]) {
+    case '0': a(); continue;
+    case '1': b(); continue;
+  }
+  break;
+}`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /a\(\)/);
+    assert.match(arb.script, /b\(\)/);
+    assert.doesNotMatch(arb.script, /switch/);
+  });
+  it('TN-1: Leave a 5-letter object that is not operator shells', () => {
+    const code = `const user = {
+  AbCde: function () { console.log(1); return 2; }
+};
+user.AbCde();`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+});
+describe('Processors tests: js-confuser', async () => {
+  const targetProcessors = (await import('../src/processors/jsConfuser.js'));
+  it('TP-1: Flatten string-bank indexer calls with a literal-like state arg', () => {
+    const code = `function makeBank() {
+  return [
+    'aB1x', 'cD2y', 'eF3z', 'gH4w', 'iJ5v', 'kL6u', 'mN7t', 'oP8s',
+    'qR9r', 'sT0q', 'uV1p', 'wX2o', 'yZ3n', 'Aa4m', 'Bb5l', 'Cc6k'
+  ];
+}
+var holder = {bank: makeBank()};
+function get(state, idx) {
+  return holder.bank[(state[0] + idx) % holder.bank.length];
+}
+var state = [3];
+get(state, 0);
+get(state, 1);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /'gH4w'/);
+    assert.match(arb.script, /'iJ5v'/);
+    assert.doesNotMatch(arb.script, /get\(state, 0\)/);
+  });
+  it('TP-2: Collapse a deterministic sum(states) loop to final bindings', () => {
+    const code = `function sum(states) {
+  var total = 0;
+  for (var i = 0; i < states.length; i++) total += states[i];
+  return total;
+}
+var s0 = 1;
+var s1 = 0;
+var s2 = 0;
+var result = '';
+while (sum([s0, s1, s2]) !== 0) {
+  switch (s0) {
+    case 1:
+      result += 'a';
+      s0 = 0;
+      s1 = 1;
+      break;
+    default:
+      if (s1) {
+        result += 'b';
+        s1 = 0;
+        s2 = 1;
+      } else {
+        result += 'c';
+        s2 = 0;
+      }
+      break;
+  }
+}
+console.log(result);`;
+    let arb = new Arborist(code);
+    arb = applyProcessors(arb, targetProcessors);
+    assert.match(arb.script, /result = 'abc'/);
+    assert.doesNotMatch(arb.script, /while/);
+    assert.match(arb.script, /console\.log\(result\)/);
+  });
+  it('TN-1: Leave a classic array-index decoder', () => {
+    const code = `const bank = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+function get(i) { return bank[i]; }
+get(0);`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+  it('TN-2: Leave an ordinary counter while', () => {
+    const code = `let i = 0;
+while (i < n) {
+  i++;
+}`;
+    let arb = new Arborist(code);
+    const originalScript = arb.script;
+    arb = applyProcessors(arb, targetProcessors);
+    assert.strictEqual(arb.script, originalScript);
+  });
+});
